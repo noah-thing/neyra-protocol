@@ -31,7 +31,7 @@ for i, (text, code) in enumerate([
     ('"é\\n\\u0001\\""', None), ('{"a":true,"b":false,"c":null}', None), ('-7', None), ('9007199254740991', None),
     ('{"a":1,"a":2}', "bad_json"), ('1.5', "bad_json"), ('1e3', "bad_json"), ('9007199254740992', "bad_json"),
     ('NaN', "bad_json"), ('"\\ud800"', "bad_json"), ('{', "bad_json"), ('01', "bad_json"),
-    ('-0', None), ('[' * 128 + ']' * 128, None), ('[' * 129 + ']' * 129, "bad_json"),
+    ('-0', None), ('{"a":' * 127 + '1' + '}' * 127, None), ('[' * 128 + ']' * 128, None), ('[' * 129 + ']' * 129, "bad_json"),
 ]):
     case("jcs", f"{i}", {"code": code} if code else None, input_hex=text.encode().hex())
 case("jcs", "invalid-utf8", {"code": "bad_json"}, input_hex="22ff22")
@@ -126,6 +126,12 @@ wide_val = np.array([1, 2], dtype=np.uint32)
 tampered("val-wrong-dtype.neyra", fix_payload(val=wide_val), {"0.val": wide_val}, "bad_manifest")
 short_val = np.array([1], dtype=np.uint16)
 tampered("length-mismatch.neyra", fix_payload(val=short_val), {"0.val": short_val}, "bad_manifest")
+tampered("unknown-tensor-member.neyra", lambda d: d["tensors"][0].update({"surprise": 1}), expect="unknown_member")
+tampered("x-tensor-member-ok.neyra", lambda d: d["tensors"][0].update({"x-note": "fine"}), expect="ok")
+tampered("unknown-member-beats-bad-manifest.neyra", lambda d: (d.update({"surprise": 1}), d.pop("result_root")), expect="unknown_member")
+tampered("bad-manifest-beats-unknown-extension.neyra", lambda d: (d.update({"requires": ["quantum/1"]}), d.pop("result_root")), expect="bad_manifest")
+tampered("extra-payload-tensor.neyra", lambda d: None, {"9.extra": np.zeros(2, dtype=np.uint8)}, "bad_manifest")
+tampered("repeated-tensor-name.neyra", lambda d: d["tensors"].append(dict(d["tensors"][0])), expect="bad_manifest")
 tampered("wrong-base-digest.neyra", lambda d: d["tensors"][0].update({"base_digest": "sha256:" + "3" * 64}),
          expect="base_mismatch", with_base=True)
 tampered("wrong-result-digest.neyra", lambda d: d["tensors"][0].update({"result_digest": "sha256:" + "1" * 64}),
@@ -171,6 +177,8 @@ ledger("ledger-dropped.jsonl", [lines[0], lines[2]], expect={"code": "bad_chain"
 ledger("ledger-swapped.jsonl", [lines[1], lines[0], lines[2]], expect={"code": "bad_chain"})
 ledger("ledger-torn.jsonl", lines, tail=b"\n{\"seq\":3", expect={"code": "bad_chain"})
 ledger("ledger-no-final-newline.jsonl", lines, tail=b"", expect={"code": "bad_chain"})
+(FIX / "ledger-empty.jsonl").write_bytes(b"")
+case("ledger", "ledger-empty", file="fixtures/ledger-empty.jsonl")
 ledger("ledger-bad-time.jsonl", [lines[0].replace(b"2026-11-04T12:00:00Z", b"yesterday"), lines[1], lines[2]], expect={"code": "bad_chain"})
 ledger("ledger-not-json.jsonl", [b"not json", lines[1], lines[2]], expect={"code": "bad_chain"})
 ledger("ledger-not-canonical.jsonl", [lines[0].replace(b'{"body"', b'{ "body"'), lines[1], lines[2]], expect={"code": "bad_chain"})
@@ -219,6 +227,9 @@ stype = json.loads(jcs(statement))
 stype["predicateType"] = "https://example.com/other"
 receipt("receipt-bad-predicate.json", envelope(stype, secret), "bad_type", pub)
 
+wrong_alg = json.loads(jcs(statement))
+wrong_alg["predicate"]["digest_algorithm"] = "other/v9"
+receipt("receipt-wrong-digest-algorithm.json", envelope(wrong_alg, secret), "bad_claim", pub)
 missing = json.loads(jcs(statement))
 del missing["predicate"]["claim"]["verdict"]
 receipt("receipt-claim-incomplete.json", envelope(missing, secret), "bad_claim", pub)

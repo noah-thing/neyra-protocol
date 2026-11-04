@@ -27,7 +27,8 @@ these restrictions:
   appear. A measurement is a decimal string such as `"0.012300"`.
 - Object keys are sorted by their UTF-16 code units.
 - Input follows the RFC 8259 grammar. Invalid UTF-8, leading zeros, duplicate keys, lone surrogates,
-  NaN, Infinity and nesting deeper than 128 levels MUST be rejected with `bad_json`.
+  NaN, Infinity and nesting deeper than 128 levels MUST be rejected with `bad_json`. The outermost
+  array or object is level 1, and a bare scalar is level 0.
 - `-0` parses to the integer 0, and so its canonical form is `0`.
 - Strings escape only what RFC 8785 requires: `"`, `\`, and U+0000 to U+001F, using `\b \t \n \f \r`
   where those exist and lowercase `\u00xx` otherwise. Everything else is literal UTF-8.
@@ -57,8 +58,9 @@ sorted by `name` in UTF-16 code unit order, then:
 The root covers every tensor and ignores how tensors are split across files, so two shardings of
 the same weights have the same root. It does not cover tokenizers, configs or chat templates.
 
-A model is the union of the tensors in its weight files. In a directory those are the top level
-`*.safetensors` files, in any order. The same tensor name in two files is `bad_safetensors`, as is
+A model is the union of the tensors in its weight files. In a directory those are the regular top
+level files whose names end in `.safetensors`, compared case sensitively, in any order, skipping
+names that start with a dot. The same tensor name in two files is `bad_safetensors`, as is
 a model with no weight files.
 
 ## 4. Reading safetensors
@@ -97,9 +99,13 @@ dtype, so a verifier never interprets them. Both are one dimensional and of equa
     val_digest = digest("payload", raw bytes of {i}.val)
     patch id   = digest("patch", JCS(manifest))
 
-Members whose names start with `x-` MUST be ignored and preserved. Any other unknown member is
-`unknown_member`. An extension in `requires` that the verifier does not implement is
-`unknown_extension`.
+In the manifest and in each tensor entry, members whose names start with `x-` MUST be ignored and
+preserved, and any other unknown member is `unknown_member`. An extension in `requires` that the
+verifier does not implement is `unknown_extension`. Members that an implemented extension defines
+are known members.
+
+Step checks run over the whole patch before the next step starts, and within a step tensors are
+taken in array order, so the first failure is well defined.
 
 ### Verification order
 
@@ -109,19 +115,22 @@ A verifier MUST run these steps in order and report the first failure:
 2. Require `neyra.manifest` and parse it strictly. `bad_type` if absent, `bad_json` if malformed.
 3. The string MUST equal the JCS encoding of what it parsed to. `not_canonical`
 4. `type` MUST be `neyra.patch/1`. `bad_type`
-5. Check members, then `requires`. `unknown_member`, `unknown_extension`. A required member that is
-   missing or of the wrong JSON type, or a digest that is not well formed, is `bad_manifest`.
-6. Each payload tensor MUST exist with the right dtype, and the two lengths MUST agree. `bad_manifest`
-7. Check each payload digest. `payload_mismatch`
-8. Each `{i}.idx` MUST be strictly increasing and inside the tensor. `bad_index`
+5. Check for unknown members at the top level, then in tensor entries. `unknown_member`
+6. A required member that is missing or of the wrong JSON type, a digest that is not well formed, or
+   a `tensors` array that is unsorted or repeats a name, is `bad_manifest`.
+7. Check `requires`. `unknown_extension`
+8. Each payload tensor MUST exist with the right dtype, the two lengths MUST agree, and the file MUST
+   hold no other tensors. `bad_manifest`
+9. Check each payload digest. `payload_mismatch`
+10. Each `{i}.idx` MUST be strictly increasing and inside the tensor. `bad_index`
 
 With a base model available:
 
-9. The base's weights root MUST equal `base_root`, and each patched tensor MUST exist in the base with
-   the manifest's dtype, shape and `base_digest`. `base_mismatch`
-10. For each tensor, replace elements of the base bytes at `idx` with `val`. The tensor digest of the
+11. The base's weights root MUST equal `base_root`, and each patched tensor MUST exist in the base with
+    the manifest's dtype, shape and `base_digest`. `base_mismatch`
+12. For each tensor, replace elements of the base bytes at `idx` with `val`. The tensor digest of the
     result MUST equal `result_digest`. `result_mismatch`
-11. The weights root after substitution MUST equal `result_root`. `result_mismatch`
+13. The weights root after substitution MUST equal `result_root`. `result_mismatch`
 
 ## 6. Ledger
 
@@ -135,7 +144,9 @@ entry, or `sha256:` and 64 zeros for the first), `time` (RFC 3339 UTC string), `
 
 The head is the digest of the last entry. A verifier MUST report `bad_chain` if a line is not
 canonical or does not parse, if members differ, if `seq` is out of order, if `prev` is wrong, if
-`time` is not of the form `YYYY-MM-DDThh:mm:ssZ`, or if the file does not end with 0x0A. A writer recovering from a crash truncates to the last complete line and appends an
+`time` does not match the pattern `YYYY-MM-DDThh:mm:ssZ`, or if a non empty file does not end with
+0x0A. The check is on the pattern alone, not on whether the date exists. An empty file is a valid
+ledger of no entries, with the all zero digest as its head. A writer recovering from a crash truncates to the last complete line and appends an
 entry of kind `recovered`.
 
 ## 7. Claim
@@ -152,7 +163,8 @@ Each statement has `metric`, `estimate`, `ci_low`, `ci_high` (decimal strings), 
 
 ## 8. Receipt
 
-A receipt is a DSSE envelope, as JSON, which need not itself be canonical: `payloadType` set to `application/vnd.in-toto+json`, `payload`
+A receipt is a DSSE envelope, as JSON, which need not itself be canonical. Base64 here is strict:
+standard alphabet, required padding, no whitespace. Members are `payloadType`, set to `application/vnd.in-toto+json`, `payload`
 (standard base64 with padding), and `signatures`, an array of `{keyid, sig}`.
 
 The payload is the JCS encoding of an in-toto Statement v1:
@@ -178,7 +190,8 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
 4. It MUST be canonical. `not_canonical`
 5. `_type` and `predicateType` MUST match. `bad_type`
 6. The predicate MUST have a claim with `type` set to `neyra.claim/1` and every member of section 7,
-   and `ledger_head`, `ledger_len` and `digest_algorithm`. `bad_claim`
+   plus `ledger_head`, `ledger_len`, and `digest_algorithm` equal to `neyra/weights/v1`. Only presence
+   and those two values are checked here, not the types of other claim members. `bad_claim`
 7. `subject` MUST hold exactly the two named entries, in either order, and they MUST match
    `result_root` and `patch_id` in the claim. `subject_mismatch`
 8. With a public key: some entry in `signatures` MUST have its `keyid` and a signature that verifies.
@@ -186,6 +199,10 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
 
 An envelope with no signatures is an unauthenticated record, and tools MUST say so. A public key
 that is not 32 bytes is a usage error, outside this protocol.
+
+Binding a receipt to its files is a separate step: the patch's id and result root MUST equal the
+claim's, `ledger_head` MUST be the digest of an entry in the ledger, and `ledger_len` MUST equal that
+entry's `seq` plus one. Revealing the salt and items lets anyone check `holdout_commit`.
 
 ## 9. Error codes
 

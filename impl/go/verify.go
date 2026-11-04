@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,13 +28,8 @@ func codeOf(err error) Code {
 	return Code(err.Error())
 }
 
-// checkMembers requires all of want, and rejects anything else except x- members.
+// checkMembers rejects anything outside want except x- members.
 func checkMembers(m map[string]any, want []string) error {
-	for _, w := range want {
-		if _, ok := m[w]; !ok {
-			return Code("bad_type")
-		}
-	}
 	for k := range m {
 		if !strings.HasPrefix(k, "x-") && !contains(want, k) {
 			return Code("unknown_member")
@@ -52,6 +48,46 @@ func contains(l []string, s string) bool {
 }
 
 func str(v any) string { s, _ := v.(string); return s }
+
+var claimMembers = []string{"base_root", "result_root", "patch_id", "task", "eval_env", "statements", "gates", "verdict", "limits"}
+
+var unsignedOf = map[uint64]string{1: "U8", 2: "U16", 4: "U32", 8: "U64"}
+
+var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+func isDigest(v any) bool { s, ok := v.(string); return ok && digestRE.MatchString(s) }
+
+// manifestShape checks the types of required members once they are known to be present.
+func manifestShape(m map[string]any) (ents, req []any, err error) {
+	bad := Code("bad_manifest")
+	ents, ok1 := m["tensors"].([]any)
+	req, ok2 := m["requires"].([]any)
+	if !ok1 || !ok2 || !isDigest(m["base_root"]) || !isDigest(m["result_root"]) {
+		return nil, nil, bad
+	}
+	for _, r := range req {
+		if _, ok := r.(string); !ok {
+			return nil, nil, bad
+		}
+	}
+	for _, e := range ents {
+		em, ok := e.(map[string]any)
+		if !ok {
+			return nil, nil, bad
+		}
+		_, shapeOK := nonNegInts(em["shape"], -1)
+		_, known := itemSize[str(em["dtype"])]
+		if _, ok := em["name"].(string); !ok || !shapeOK || !known {
+			return nil, nil, bad
+		}
+		for _, k := range tensorMembers[3:] {
+			if !isDigest(em[k]) {
+				return nil, nil, bad
+			}
+		}
+	}
+	return ents, req, nil
+}
 
 func verifyPatch(file, baseDir string) error {
 	raw, err := os.ReadFile(file)
@@ -80,19 +116,18 @@ func verifyPatch(file, baseDir string) error {
 	if err := checkMembers(m, manifestMembers); err != nil {
 		return err
 	}
-	ents, ok1 := m["tensors"].([]any)
-	req, ok2 := m["requires"].([]any)
-	if !ok1 || !ok2 {
-		return Code("bad_type")
+	if es, ok := m["tensors"].([]any); ok {
+		for _, e := range es {
+			if em, ok := e.(map[string]any); ok {
+				if err := checkMembers(em, tensorMembers); err != nil {
+					return err
+				}
+			}
+		}
 	}
-	for _, e := range ents {
-		em, ok := e.(map[string]any)
-		if !ok {
-			return Code("bad_type")
-		}
-		if err := checkMembers(em, tensorMembers); err != nil {
-			return err
-		}
+	ents, req, err := manifestShape(m)
+	if err != nil {
+		return err
 	}
 	if len(req) > 0 {
 		return Code("unknown_extension") // no extension is implemented
@@ -106,26 +141,27 @@ func verifyPatch(file, baseDir string) error {
 		val                       []byte
 	}
 	edits := make([]edit, len(ents))
+	digestBad := false // structure of every payload is checked before any digest
 	for i, e := range ents {
 		em := e.(map[string]any)
-		shape, ok := nonNegInts(em["shape"], -1)
-		if !ok {
-			return Code("bad_type")
-		}
+		shape, _ := nonNegInts(em["shape"], -1)
 		ed := edit{str(em["name"]), str(em["dtype"]), str(em["base_digest"]), str(em["result_digest"]), shape, nil, nil}
-		// val is raw bits; fixtures store it as an unsigned type of equal width.
 		idx, val := st.tensors[strconv.Itoa(i)+".idx"], st.tensors[strconv.Itoa(i)+".val"]
-		if itemSize[ed.dtype] == 0 || idx.dtype != "I64" || itemSize[val.dtype] != itemSize[ed.dtype] || len(val.raw)/int(itemSize[ed.dtype])*8 != len(idx.raw) {
-			return Code("payload_mismatch")
+		if idx.dtype != "I64" || val.dtype != unsignedOf[itemSize[ed.dtype]] || len(idx.shape) != 1 ||
+			len(val.shape) != 1 || idx.shape[0] != val.shape[0] {
+			return Code("bad_manifest")
 		}
 		if digest("payload", idx.raw) != em["idx_digest"] || digest("payload", val.raw) != em["val_digest"] {
-			return Code("payload_mismatch")
+			digestBad = true
 		}
 		ed.val = val.raw
 		for j := 0; j < len(idx.raw); j += 8 {
 			ed.idx = append(ed.idx, binary.LittleEndian.Uint64(idx.raw[j:]))
 		}
 		edits[i] = ed
+	}
+	if digestBad {
+		return Code("payload_mismatch")
 	}
 	for _, ed := range edits {
 		n, _ := numel(ed.shape)
@@ -200,7 +236,7 @@ func verifyLedger(file string) (string, error) {
 		if !isBody || !isKind || !isTime || e["seq"] != int64(seq) || e["prev"] != prev {
 			return "", bad
 		}
-		if _, err := time.Parse(time.RFC3339, t); err != nil || !strings.HasSuffix(t, "Z") {
+		if _, err := time.Parse("2006-01-02T15:04:05Z", t); err != nil {
 			return "", bad
 		}
 		prev = digest("ledger", line)
@@ -244,16 +280,35 @@ func verifyReceipt(file string, pub []byte) error {
 		return Code("bad_type")
 	}
 	claim, _ := pred["claim"].(map[string]any)
-	subj, _ := s["subject"].([]any)
-	if len(subj) != 2 || claim == nil {
-		return Code("subject_mismatch")
+	if claim == nil || claim["type"] != "neyra.claim/1" {
+		return Code("bad_claim")
 	}
-	for i, want := range [][2]string{{"result-weights", str(claim["result_root"])}, {"patch", str(claim["patch_id"])}} {
-		sm, _ := subj[i].(map[string]any)
+	for _, k := range claimMembers {
+		if _, ok := claim[k]; !ok {
+			return Code("bad_claim")
+		}
+	}
+	for _, k := range []string{"ledger_head", "ledger_len", "digest_algorithm"} {
+		if _, ok := pred[k]; !ok {
+			return Code("bad_claim")
+		}
+	}
+	// The spec lists the subjects in a fixed order but accepts either.
+	want := map[string]string{"result-weights": str(claim["result_root"]), "patch": str(claim["patch_id"])}
+	subj, _ := s["subject"].([]any)
+	seen := map[string]bool{}
+	for _, e := range subj {
+		sm, _ := e.(map[string]any)
 		d, _ := sm["digest"].(map[string]any)
-		if sm["name"] != want[0] || !strings.HasPrefix(want[1], "sha256:") || d["sha256"] != strings.TrimPrefix(want[1], "sha256:") {
+		name := str(sm["name"])
+		root, known := want[name]
+		if !known || seen[name] || !isDigest(root) || d["sha256"] != strings.TrimPrefix(root, "sha256:") {
 			return Code("subject_mismatch")
 		}
+		seen[name] = true
+	}
+	if len(seen) != 2 {
+		return Code("subject_mismatch")
 	}
 	if pub == nil {
 		return nil

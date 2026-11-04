@@ -22,3 +22,13 @@ jobs:
       - run: uv pip install -e '.[dev]'
       - run: uv run --no-sync ruff check src tests experiments
       - run: uv run --no-sync pytest -q
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go run . vectors ../../spec/vectors
+        working-directory: impl/go

@@ -50,23 +50,30 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
         return e.code
     if doc.get("type") != TYPE:
         return "bad_type"
+    entries = doc.get("tensors") if isinstance(doc.get("tensors"), list) else []
     if any(k not in KNOWN_MEMBERS and not k.startswith("x-") for k in doc):
         return "unknown_member"
+    for t in entries:
+        if isinstance(t, dict) and any(k not in KNOWN_TENSOR and not k.startswith("x-") for k in t):
+            return "unknown_member"
     if not KNOWN_MEMBERS <= set(doc) or not isinstance(doc["requires"], list) or not isinstance(doc["tensors"], list):
         return "bad_manifest"
     if not all(isinstance(x, str) for x in doc["requires"]) or not all(map(good_digest, (doc["base_root"], doc["result_root"]))):
         return "bad_manifest"
-    if set(doc["requires"]) - {LOW_RANK}:
-        return "unknown_extension"
-    for t in doc["tensors"]:
-        if not isinstance(t, dict):
-            return "bad_manifest"
-        if any(k not in KNOWN_TENSOR and not k.startswith("x-") for k in t):
-            return "unknown_member"
-        if not TENSOR_MEMBERS <= set(t) or t["dtype"] not in ITEMSIZE or not isinstance(t["shape"], list):
+    for t in entries:
+        if not isinstance(t, dict) or not TENSOR_MEMBERS <= set(t) or t["dtype"] not in ITEMSIZE or not isinstance(t["shape"], list):
             return "bad_manifest"
         if not all(good_digest(t[k]) for k in ("base_digest", "result_digest", "idx_digest", "val_digest")):
             return "bad_manifest"
+    order = [t["name"].encode("utf-16-be", "surrogatepass") for t in entries]
+    if order != sorted(set(order)):
+        return "bad_manifest"
+    if set(doc["requires"]) - {LOW_RANK}:
+        return "unknown_extension"
+    expected = {f"{i}.{part}" for i, t in enumerate(entries) for part in
+                ("idx", "val", *(("left", "right") if "left_digest" in t else ()))}
+    if set(refs) != expected:
+        return "bad_manifest"
     for i, t in enumerate(doc["tensors"]):
         idx, val = refs.get(f"{i}.idx"), refs.get(f"{i}.val")
         if idx is None or val is None or idx.dtype != "I64" or val.dtype != RAW[ITEMSIZE[t["dtype"]]]:

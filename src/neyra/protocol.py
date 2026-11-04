@@ -234,7 +234,8 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
     predicate = statement.get("predicate")
     claim = predicate.get("claim") if isinstance(predicate, dict) else None
     if (not isinstance(claim, dict) or claim.get("type") != "neyra.claim/1" or not CLAIM_MEMBERS <= set(claim)
-            or not {"ledger_head", "ledger_len", "digest_algorithm"} <= set(predicate)):
+            or not {"ledger_head", "ledger_len", "digest_algorithm"} <= set(predicate)
+            or predicate["digest_algorithm"] != "neyra/weights/v1"):
         raise ProtocolError("bad_claim", "the predicate does not hold a complete claim")
     try:
         subjects = {s["name"]: s["digest"]["sha256"] for s in statement["subject"]}

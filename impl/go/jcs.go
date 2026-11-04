@@ -168,7 +168,7 @@ func (p *parser) str() (any, error) {
 var simpleEscapes = map[byte]byte{'"': '"', '\\': '\\', '/': '/', 'b': '\b', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t'}
 
 func (p *parser) enter() error {
-	if p.depth++; p.depth > 512 {
+	if p.depth++; p.depth > 128 {
 		return Code("bad_json")
 	}
 	return nil
