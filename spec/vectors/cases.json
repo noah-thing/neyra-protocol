@@ -1,0 +1,554 @@
+[
+ {
+  "kind": "jcs",
+  "id": "0",
+  "input_hex": "7b2262223a312c2261223a327d",
+  "expect": {
+   "code": "ok",
+   "hex": "7b2261223a322c2262223a317d"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "1",
+  "input_hex": "7b225c7566623333223a312c225c75643833645c7564653030223a322c2261223a337d",
+  "expect": {
+   "code": "ok",
+   "hex": "7b2261223a332c22f09f9880223a322c22efacb3223a317d"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "2",
+  "input_hex": "5b312c20322c2020335d",
+  "expect": {
+   "code": "ok",
+   "hex": "5b312c322c335d"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "3",
+  "input_hex": "22c3a95c6e5c75303030315c2222",
+  "expect": {
+   "code": "ok",
+   "hex": "22c3a95c6e5c75303030315c2222"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "4",
+  "input_hex": "7b2261223a747275652c2262223a66616c73652c2263223a6e756c6c7d",
+  "expect": {
+   "code": "ok",
+   "hex": "7b2261223a747275652c2262223a66616c73652c2263223a6e756c6c7d"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "5",
+  "input_hex": "2d37",
+  "expect": {
+   "code": "ok",
+   "hex": "2d37"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "6",
+  "input_hex": "39303037313939323534373430393931",
+  "expect": {
+   "code": "ok",
+   "hex": "39303037313939323534373430393931"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "7",
+  "input_hex": "7b2261223a312c2261223a327d",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "8",
+  "input_hex": "312e35",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "9",
+  "input_hex": "316533",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "10",
+  "input_hex": "39303037313939323534373430393932",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "11",
+  "input_hex": "4e614e",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "12",
+  "input_hex": "225c756438303022",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "13",
+  "input_hex": "7b",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "digest",
+  "id": "payload",
+  "domain": "payload",
+  "data_hex": "",
+  "expect": {
+   "digest": "sha256:6dbb6d24ba7124ad68094b83ec09dafe3edf10d879f5f8e9d3ad8aa056263b52"
+  }
+ },
+ {
+  "kind": "digest",
+  "id": "patch",
+  "domain": "patch",
+  "data_hex": "616263",
+  "expect": {
+   "digest": "sha256:0731ce01cfa1a1907a333ba56ade43e6fee6db5a2f9ea49baae0ea83eaef2965"
+  }
+ },
+ {
+  "kind": "digest",
+  "id": "weights",
+  "domain": "weights",
+  "data_hex": "00ff",
+  "expect": {
+   "digest": "sha256:100fd930fbfca6c02747889f509b5a281ebc7ff68894d0f8c8ae8ad251d8b2d7"
+  }
+ },
+ {
+  "kind": "digest",
+  "id": "ledger",
+  "domain": "ledger",
+  "data_hex": "c3a9",
+  "expect": {
+   "digest": "sha256:4f11c12690b96b5252287cdc7d46563b3c9929f8e0d95f010229af55305d1c67"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "bf16",
+  "dtype": "BF16",
+  "shape": [
+   2,
+   2
+  ],
+  "raw_hex": "0001020304050607",
+  "expect": {
+   "digest": "sha256:660ca356831f321289e2be617eed31fdf5fde977424cbef05fce53220df77213"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "same-bytes-f16",
+  "dtype": "F16",
+  "shape": [
+   2,
+   2
+  ],
+  "raw_hex": "0001020304050607",
+  "expect": {
+   "digest": "sha256:376cc59383c3f13a4928c55157e19ee47f190a1e70ed8814957a65492649f539"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "same-bytes-reshaped",
+  "dtype": "BF16",
+  "shape": [
+   4
+  ],
+  "raw_hex": "0001020304050607",
+  "expect": {
+   "digest": "sha256:9f84752e6ad7e41abd726d4ee071448497c1c4541320bcc490e935b573a93e91"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "scalar",
+  "dtype": "F32",
+  "shape": [],
+  "raw_hex": "00000000",
+  "expect": {
+   "digest": "sha256:a9d73f14fdeefffea30f032de57abe0c7ab05a60e696fbb9fe91a5463521b5a0"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "empty",
+  "dtype": "U8",
+  "shape": [
+   0
+  ],
+  "raw_hex": "",
+  "expect": {
+   "digest": "sha256:e94ef90d0ec844fe57f2e9b67fb5a33dfc30bfd7d0a6bd3141cbed7d44fd64af"
+  }
+ },
+ {
+  "kind": "tensor",
+  "id": "bool",
+  "dtype": "BOOL",
+  "shape": [
+   3
+  ],
+  "raw_hex": "000100",
+  "expect": {
+   "digest": "sha256:c5634afacd9bb5108f528a6690fe2ad0a895dd6dd0bd2db3f0658162f997f5ed"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "one-shard",
+  "model": "fixtures/base",
+  "expect": {
+   "root": "sha256:eb54b374fc348f3a79937e7fad5edef74b4ecb3501dd129f95119c65afa56c7b"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "two-shards-same-root",
+  "model": "fixtures/base-resharded",
+  "expect": {
+   "root": "sha256:eb54b374fc348f3a79937e7fad5edef74b4ecb3501dd129f95119c65afa56c7b"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "different",
+  "model": "fixtures/other",
+  "expect": {
+   "root": "sha256:2bf0be72355e808f02096e93b027b1f9a949557ce7cb87c535e9546c421d4d4c"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "valid-with-base",
+  "file": "fixtures/good.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "valid-no-base",
+  "file": "fixtures/good.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "wrong-base",
+  "file": "fixtures/good.neyra",
+  "base": "fixtures/other",
+  "expect": {
+   "code": "base_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "bad-type",
+  "file": "fixtures/bad-type.neyra",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "unknown-member",
+  "file": "fixtures/unknown-member.neyra",
+  "expect": {
+   "code": "unknown_member"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "x-member-ok",
+  "file": "fixtures/x-member-ok.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "unknown-extension",
+  "file": "fixtures/unknown-extension.neyra",
+  "expect": {
+   "code": "unknown_extension"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "wrong-val-digest",
+  "file": "fixtures/wrong-val-digest.neyra",
+  "expect": {
+   "code": "payload_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "index-out-of-range",
+  "file": "fixtures/index-out-of-range.neyra",
+  "expect": {
+   "code": "bad_index"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "index-unsorted",
+  "file": "fixtures/index-unsorted.neyra",
+  "expect": {
+   "code": "bad_index"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "index-duplicate",
+  "file": "fixtures/index-duplicate.neyra",
+  "expect": {
+   "code": "bad_index"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "wrong-result-digest",
+  "file": "fixtures/wrong-result-digest.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "result_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "wrong-result-root",
+  "file": "fixtures/wrong-result-root.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "result_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "not-canonical",
+  "file": "fixtures/not-canonical.neyra",
+  "expect": {
+   "code": "not_canonical"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "no-manifest",
+  "file": "fixtures/no-manifest.neyra",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "trailing-bytes",
+  "file": "fixtures/trailing-bytes.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "too-short",
+  "file": "fixtures/short.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "huge-header",
+  "file": "fixtures/huge-header.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "overlapping-offsets",
+  "file": "fixtures/overlap.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-good",
+  "file": "fixtures/ledger-good.jsonl",
+  "expect": {
+   "code": "ok",
+   "head": "sha256:7b73244fc5f44b97948102cb2cfd948a57abf97e8bdcee0f6d2e9766f7990ef0"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-edited",
+  "file": "fixtures/ledger-edited.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-dropped",
+  "file": "fixtures/ledger-dropped.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-swapped",
+  "file": "fixtures/ledger-swapped.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-torn",
+  "file": "fixtures/ledger-torn.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-no-final-newline",
+  "file": "fixtures/ledger-no-final-newline.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-not-canonical",
+  "file": "fixtures/ledger-not-canonical.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signed",
+  "file": "fixtures/receipt-signed.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-no-key-given",
+  "file": "fixtures/receipt-no-key-given.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-unsigned",
+  "file": "fixtures/receipt-unsigned.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-unsigned-but-key-given",
+  "file": "fixtures/receipt-unsigned-but-key-given.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-wrong-key",
+  "file": "fixtures/receipt-wrong-key.json",
+  "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-tampered-claim",
+  "file": "fixtures/receipt-tampered-claim.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-wrong-subject",
+  "file": "fixtures/receipt-wrong-subject.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-not-canonical",
+  "file": "fixtures/receipt-not-canonical.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "not_canonical"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-bad-type",
+  "file": "fixtures/receipt-bad-type.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-bad-predicate",
+  "file": "fixtures/receipt-bad-predicate.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_type"
+  }
+ }
+]
