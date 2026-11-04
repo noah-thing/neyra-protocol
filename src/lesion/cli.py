@@ -95,6 +95,32 @@ def cmd_apply(a) -> int:
     return 0
 
 
+def local_path(spec: str) -> str:
+    if Path(spec).expanduser().exists():
+        return str(Path(spec).expanduser())
+    from huggingface_hub import snapshot_download
+
+    repo, _, rev = spec.partition("@")
+    return snapshot_download(repo, revision=rev or None)
+
+
+def cmd_doctor(a) -> int:
+    from .doctor import examine
+    from .runtime import open_runtime
+
+    exam = examine(open_runtime(local_path(a.model), a.backend), a.n, a.max_tokens)
+    print(f"{exam.n} problems, up to {exam.max_tokens} tokens each")
+    print(f"correct {exam.correct:.0%}, mean length {exam.tokens:.0f} tokens\n")
+    if not exam.symptoms:
+        print("no symptoms found in this battery, which covers loops, runaway thinking and missing answers")
+    for s in exam.symptoms:
+        print(f"[{s.severity}] {s.name}: {s.rate:.0%} of problems")
+        print(f"    {s.explanation}")
+        if s.example:
+            print(f"    ...{s.example!r}")
+    return 1 if exam.symptoms else 0
+
+
 def cmd_export(a) -> int:
     from .export import to_gguf_lora, to_peft
 
@@ -162,6 +188,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("patch")
     p.add_argument("-o", "--out", required=True)
     p.set_defaults(fn=cmd_apply)
+
+    p = sub.add_parser("doctor", help="run a model through a fixed battery and report what goes wrong")
+    p.add_argument("model")
+    p.add_argument("-n", type=int, default=32)
+    p.add_argument("--max-tokens", type=int, default=3072)
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
+    p.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("export", help="write a patch as a LoRA for PEFT or llama.cpp")
     p.add_argument("base")
