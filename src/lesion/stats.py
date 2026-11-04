@@ -32,7 +32,7 @@ def sign_test(gained: int, lost: int) -> float:
     return min(1.0, 2 * tail)
 
 
-def paired(base: np.ndarray, edited: np.ndarray, boot: int = 10000, seed: int = 0) -> Paired:
+def paired(base: np.ndarray, edited: np.ndarray, boot: int = 10000, seed: int = 0, alpha: float = 0.05) -> Paired:
     base = np.asarray(base, dtype=np.float64)
     edited = np.asarray(edited, dtype=np.float64)
     if base.shape != edited.shape or base.ndim != 1 or len(base) == 0:
@@ -40,7 +40,7 @@ def paired(base: np.ndarray, edited: np.ndarray, boot: int = 10000, seed: int = 
     d = edited - base
     rng = np.random.default_rng(seed)
     means = d[rng.integers(0, len(d), (boot, len(d)))].mean(axis=1)
-    low, high = np.quantile(means, [0.025, 0.975])
+    low, high = np.quantile(means, [alpha / 2, 1 - alpha / 2])
     binary = set(np.unique(np.concatenate([base, edited]))) <= {0.0, 1.0}
     gained, lost = (int((d > 0).sum()), int((d < 0).sum())) if binary else (0, 0)
     return Paired(len(d), float(base.mean()), float(edited.mean()), float(d.mean()),

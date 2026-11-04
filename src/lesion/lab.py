@@ -24,7 +24,7 @@ import numpy as np
 
 from . import __version__
 from .behavior import score
-from .bisect import Measure, bisect
+from .bisect import Measure, bisect, confirm
 from .ledger import Ledger
 from .numerics import from_float, is_float, to_float
 from .patch import Patch, TensorEdit, bits_sha256, diff_tensor
@@ -110,7 +110,7 @@ class Lab:
         self.model, self.task, self.rt = model, task, runtime
         self.ck = Checkpoint.open(model)
         self.passes, self.used = passes, 0
-        self.submissions = submissions
+        self.submissions = self.allowed = submissions
         self.candidates: dict[str, Candidate] = {}
         self.rollouts: dict[str, list] = {}
         self.findings: dict[str, dict] = {}
@@ -314,26 +314,34 @@ class Lab:
         return r
 
     def bisect(self, candidate: str, rollouts: str, retain: float = 0.9, grain: str = "column", budget: int = 400) -> dict:
-        """Smallest part of the candidate that keeps the effect on repeated tokens."""
+        """Smallest part of the candidate that keeps the effect, confirmed on unseen texts."""
         self._spend(1, "bisect")
         units = UnitSet(self.candidate(candidate).patch, self.ck, grain)
-        probe = SelectivityProbe(self.rt, self._spans(rollouts))
+        spans = self._spans(rollouts, limit=24)
+        cut = max(len(spans) * 2 // 3, 1)
+        search_probe = SelectivityProbe(self.rt, spans[:cut])
+        check_probe = SelectivityProbe(self.rt, spans[cut:] or spans[:cut])
 
-        def measure(chosen) -> Measure:
-            self.rt.set_tensors(units.tensors(chosen))
-            return probe()
+        def using(probe):
+            def measure(chosen) -> Measure:
+                self.rt.set_tensors(units.tensors(chosen))
+                return probe()
+            return measure
 
-        r = bisect(len(units), measure, retain=retain, budget=budget)
+        r = bisect(len(units), using(search_probe), retain=retain, budget=budget)
+        check = confirm(len(units), r.units, using(check_probe), retain)
         self.rt.reset()
         edits = []
         for name, (bits, dtype) in units.tensors(r.units).items():
             edits.append(diff_tensor(name, dtype, units.base[name], bits))
         added = self._add(Patch(edits, {"bisected_from": candidate, "retain": retain}), f"bisect of {candidate}")
-        result = {"kept_units": len(r.units), "total_units": r.total, "retained": r.retained,
-                  "minimal": r.minimal, "trials": len(r.trials),
+        result = {"kept_units": len(r.units), "total_units": r.total, "minimal": r.minimal,
+                  "search_retained": r.retained, "trials": len(r.trials),
+                  "confirmed": check.passed, "confirmed_retained": check.retained, "confirm_items": check.n,
                   "weights_full": units.weights_changed(range(len(units))),
                   "weights_kept": units.weights_changed(r.units), **added}
-        self.ledger.append("bisect", candidate=candidate, **{k: result[k] for k in ("kept_units", "total_units", "retained", "minimal")})
+        self.ledger.append("bisect", candidate=candidate, **{k: result[k] for k in (
+            "kept_units", "total_units", "confirmed", "confirmed_retained")})
         return result
 
     def drift(self, candidate: str) -> dict:
@@ -356,10 +364,18 @@ class Lab:
         return self.rt.logits_at(ids, np.arange(max(2, len(ids) // 4), len(ids), stride))
 
     def submit(self, candidate: str, seed: int = 2) -> dict:
-        """The one sealed evaluation. Holdout items are never returned."""
+        """The sealed evaluation. Holdout items are never returned.
+
+        One submission reports everything. With several, each attempt reveals a single
+        bit until the first PASS, which ends the session, and every gate is held to
+        alpha / (k (k + 1) / 2). This is the SparseValidate rule (Dwork et al., 2015):
+        the holdout only leaks the few bits of which attempt passed.
+        """
         if self.submissions <= 0:
             raise BudgetSpent("no submissions left")
         self.submissions -= 1
+        k = self.allowed
+        alpha = 0.05 / (k * (k + 1) / 2)
         c = self.candidate(candidate)
         items = self.task.holdout
 
@@ -376,9 +392,9 @@ class Lab:
         alternatives = {}
         for alt in self.task.alternatives:
             s, _ = self._run(items, seed, system=alt.get("system"), thinking=alt.get("thinking"))
-            alternatives[alt["name"]] = asdict(paired(s, edited))
+            alternatives[alt["name"]] = asdict(paired(s, edited, alpha=alpha))
 
-        effect, versus_control = paired(base, edited), paired(ctrl, edited)
+        effect, versus_control = paired(base, edited, alpha=alpha), paired(ctrl, edited, alpha=alpha)
         drift = self.drift(candidate)
         gates = {
             "effect": effect.low > 0,
@@ -387,6 +403,11 @@ class Lab:
             "beats_free_alternatives": all(a["low"] > 0 for a in alternatives.values()),
         }
         verdict = "PASS" if all(gates.values()) else "FAIL"
+        if verdict == "FAIL" and k > 1:
+            self.ledger.append("submit", candidate=candidate, verdict=verdict, fingerprint=c.patch.fingerprint)
+            return {"verdict": verdict, "submissions_left": self.submissions}
+        if verdict == "PASS":
+            self.submissions = 0
         receipt = {
             "lesion": __version__, "time": time.time(), "model": self.ck.spec, "task": self.task.name,
             "metric": self.task.metric, "sampling": asdict(self.task.sampling), "max_tokens": self.task.max_tokens,

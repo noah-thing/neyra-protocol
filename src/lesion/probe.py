@@ -72,4 +72,5 @@ class SelectivityProbe:
 
     def __call__(self) -> Measure:
         target, keep = self.drops()
-        return Measure(float((target - keep).mean()), 0.0)
+        items = target - keep
+        return Measure(float(items.mean()), float(items.std(ddof=1) / np.sqrt(len(items))), items)

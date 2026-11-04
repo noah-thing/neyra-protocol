@@ -8,6 +8,10 @@ that ranking, which needs far fewer trials than splitting blindly.
 
 The result is 1-minimal: removing any single remaining unit loses the effect. It is
 not guaranteed to be the smallest set, and a different start can find another one.
+
+The search looks at one set of items many times and keeps its best find, so its own
+numbers are biased upward by selection. They are not evidence. Evidence comes from
+confirm(), which measures the final set once on items the search never saw.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ Units = tuple[int, ...]
 class Measure:
     value: float
     stderr: float = 0.0
+    items: np.ndarray | None = field(default=None, compare=False)
 
 
 @dataclass
@@ -83,8 +88,19 @@ class Search:
 
     def passes(self, units: Units) -> bool:
         m = self.ask(units)
+        if self.z == 0:
+            return self.share(m) >= self.retain
+        if m.items is not None and self.baseline.items is not None:
+            y = retained_gap(self.baseline.items, m.items, self.full.items, self.retain)
+            return y.mean() - self.z * y.std(ddof=1) / np.sqrt(len(y)) >= 0
         margin = self.z * np.hypot(m.stderr, self.baseline.stderr) / abs(self.effect)
         return self.share(m) - margin >= self.retain
+
+
+def retained_gap(base: np.ndarray, subset: np.ndarray, full: np.ndarray, retain: float) -> np.ndarray:
+    """Per item margin over the target. Its mean is at least 0 when the subset keeps enough."""
+    sign = np.sign((full - base).mean()) or 1.0
+    return sign * ((subset - base) - retain * (full - base))
 
 
 def rank(search: Search) -> list[tuple[int, float]]:
@@ -99,6 +115,22 @@ def rank(search: Search) -> list[tuple[int, float]]:
         lost = 1.0 - search.share(search.ask(tuple(x for x in everything if x != u)))
         scores.append((u, (alone + lost) / 2))
     return sorted(scores, key=lambda x: -x[1])
+
+
+def rank_banzhaf(search: Search, samples: int = 256, seed: int = 0) -> list[tuple[int, float]]:
+    """Mean score with a unit minus mean score without it, over random subsets.
+
+    Every sampled subset informs every unit, so cost does not grow with the number of
+    units, and interactions count because units are scored among the others. See Wang
+    and Jia (2023) on Banzhaf values with maximum sample reuse.
+    """
+    rng = np.random.default_rng(seed)
+    n = search.n
+    masks = rng.random((samples, n)) < 0.5
+    values = np.array([search.share(search.ask(tuple(np.flatnonzero(m).tolist()))) for m in masks])
+    inside = (masks * values[:, None]).sum(0) / np.maximum(masks.sum(0), 1)
+    outside = ((~masks) * values[:, None]).sum(0) / np.maximum((~masks).sum(0), 1)
+    return sorted(((u, float(inside[u] - outside[u])) for u in range(n)), key=lambda x: -x[1])
 
 
 def shrink_prefix(search: Search, order: Sequence[int]) -> Units:
@@ -139,10 +171,10 @@ def ddmin(search: Search, start: Units) -> tuple[Units, bool]:
     return tuple(current), True
 
 
-def bisect(n: int, measure: Callable[[Units], Measure], retain: float = 0.9, z: float = 1.96,
-           budget: int = 2000, ranked: bool = True) -> Result:
+def bisect(n: int, measure: Callable[[Units], Measure], retain: float = 0.9, z: float = 0.0,
+           budget: int = 2000, ranked: bool = True, banzhaf_above: int = 256) -> Result:
     search = Search(n, measure, retain, z, budget)
-    ranking = rank(search) if ranked else []
+    ranking = [] if not ranked else rank_banzhaf(search) if n > banzhaf_above else rank(search)
     start = shrink_prefix(search, [u for u, _ in ranking]) if ranked else tuple(range(n))
     if not search.passes(start):
         start = tuple(range(n))
@@ -150,3 +182,24 @@ def bisect(n: int, measure: Callable[[Units], Measure], retain: float = 0.9, z: 
     achieved = search.ask(units)
     return Result(tuple(sorted(units)), n, search.baseline, search.full, achieved,
                   search.share(achieved), minimal, search.trials, ranking)
+
+
+@dataclass
+class Confirmation:
+    n: int
+    retained: float
+    margin: float
+    low: float
+    passed: bool
+
+
+def confirm(n: int, units: Units, measure: Callable[[Units], Measure], retain: float = 0.9,
+            boot: int = 10000, seed: int = 0) -> Confirmation:
+    """One look, on items the search never saw. Passes if the lower bound clears the target."""
+    base, subset, full = measure(()), measure(tuple(units)), measure(tuple(range(n)))
+    y = retained_gap(base.items, subset.items, full.items, retain)
+    rng = np.random.default_rng(seed)
+    means = y[rng.integers(0, len(y), (boot, len(y)))].mean(axis=1)
+    low = float(np.quantile(means, 0.05))
+    kept = float((subset.items - base.items).mean() / (full.items - base.items).mean())
+    return Confirmation(len(y), kept, float(y.mean()), low, low >= 0)

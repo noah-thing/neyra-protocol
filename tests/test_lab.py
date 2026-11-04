@@ -123,3 +123,18 @@ def test_control_keeps_size_of_change(tmp_path, model_dir, rng):
         return np.linalg.norm(f - to_float(w, "BF16"))
 
     assert norm(ctrl) == pytest.approx(norm(real), rel=0.03)
+
+
+def test_several_submissions_reveal_one_bit_and_stop_at_pass(tmp_path, model_dir, rng):
+    lab, w, u = setup(tmp_path, model_dir, rng, submissions=3)
+    v = rng.standard_normal(32)
+    v -= (v @ u) * u
+    v /= np.linalg.norm(v)
+    bad = tmp_path / "bad.lesion"
+    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape))]).save(bad)
+    r = lab.submit(lab.propose_from_file(str(bad))["candidate"])
+    assert r == {"verdict": "FAIL", "submissions_left": 2}
+    good = real_edit(lab, w, u, tmp_path)
+    assert lab.submit(good)["verdict"] == "PASS"
+    with pytest.raises(BudgetSpent):
+        lab.submit(good)
