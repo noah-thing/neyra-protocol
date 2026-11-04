@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 
 import mlx.core as mx
@@ -64,8 +65,17 @@ def output_presence(penalty: float, prompt_length: int):
     return apply
 
 
+def cap_memory() -> None:
+    """Keep MLX inside a budget. Unchecked growth on a shared machine can panic the kernel."""
+    total = mx.device_info()["memory_size"]
+    share = float(os.environ.get("NEYRA_MEMORY_SHARE", "0.45"))
+    mx.set_memory_limit(int(total * share))
+    mx.set_cache_limit(int(total * 0.1))
+
+
 class MlxRuntime:
     def __init__(self, path: str):
+        cap_memory()
         self.model, self.tokenizer = load(path)
         self.index = {canonical(k): k for k, _ in tree_flatten(self.model.parameters())}
         self.originals: dict[str, mx.array] = {}
