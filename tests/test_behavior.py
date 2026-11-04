@@ -1,4 +1,4 @@
-from lesion.behavior import boxed_answer, duplicate_share, normalize_answer, score
+from neyra.behavior import boxed_answer, duplicate_share, normalize_answer, score
 
 
 def test_duplicate_share_separates_loops_from_prose():

@@ -99,7 +99,7 @@ class Candidate:
 
 
 def neutral_texts() -> dict[str, list[str]]:
-    return json.loads(resources.files("lesion.data").joinpath("neutral.json").read_text())
+    return json.loads(resources.files("neyra.data").joinpath("neutral.json").read_text())
 
 
 class Lab:
@@ -216,7 +216,7 @@ class Lab:
     def propose_from_file(self, path: str, note: str = "") -> dict:
         """Accept any edit the agent computed itself, as a patch or a safetensors checkpoint."""
         p = Path(path)
-        if p.suffix == ".lesion":
+        if p.suffix == ".neyra":
             return self._add(Patch.load(p), note)
         other = Checkpoint.open(str(p))
         edits = []
@@ -241,7 +241,7 @@ class Lab:
                 raise Refused(f"{e.name}: multiplying a whole tensor by a constant is not allowed")
         cid = f"c{len(self.candidates)}"
         self.candidates[cid] = Candidate(cid, patch, note)
-        patch.save(self.root / f"{cid}.lesion")
+        patch.save(self.root / f"{cid}.neyra")
         self.ledger.append("candidate", id=cid, fingerprint=patch.fingerprint, note=note)
         return {"candidate": cid, **self.describe(cid)}
 
@@ -409,7 +409,7 @@ class Lab:
         if verdict == "PASS":
             self.submissions = 0
         receipt = {
-            "lesion": __version__, "time": time.time(), "model": self.ck.spec, "task": self.task.name,
+            "neyra": __version__, "time": time.time(), "model": self.ck.spec, "task": self.task.name,
             "metric": self.task.metric, "sampling": asdict(self.task.sampling), "max_tokens": self.task.max_tokens,
             "holdout_commit": self.holdout_commit, "candidate": candidate, "fingerprint": c.patch.fingerprint,
             "tensors": [{"name": e.name, "base_sha256": e.base_sha256, "edited_sha256": e.edited_sha256 or

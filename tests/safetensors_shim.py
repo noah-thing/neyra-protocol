@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lesion.store import LocalBlob, parse_header
+from neyra.store import LocalBlob, parse_header
 
 
 def read(path):

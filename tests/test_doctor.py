@@ -1,8 +1,8 @@
 import re
 
-from lesion.doctor import examine
-from lesion.runtime import Rollout
-from lesion.tasks import reasoning_problems
+from neyra.doctor import examine
+from neyra.runtime import Rollout
+from neyra.tasks import reasoning_problems
 
 
 class Scripted:

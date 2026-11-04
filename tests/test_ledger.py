@@ -3,8 +3,8 @@ import json
 import numpy as np
 import pytest
 
-from lesion.ledger import BrokenChain, Ledger, verify
-from lesion.stats import kl_from_logits, paired, sign_test
+from neyra.ledger import BrokenChain, Ledger, verify
+from neyra.stats import kl_from_logits, paired, sign_test
 
 
 def test_chain_survives_reload(tmp_path):

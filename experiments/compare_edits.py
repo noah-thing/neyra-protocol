@@ -6,16 +6,16 @@ from pathlib import Path
 
 import numpy as np
 
-from lesion.interop import from_weight_space_logs
-from lesion.lab import neutral_texts
-from lesion.numerics import to_float
-from lesion.patch import Patch, diff_tensor
-from lesion.probe import SelectivityProbe, loop_spans
-from lesion.recover import recover
-from lesion.repair import apply_row, moments, neutral_energy, selective_row
-from lesion.runtime.mlx import MlxRuntime
-from lesion.stats import kl_from_logits
-from lesion.store import Checkpoint
+from neyra.interop import from_weight_space_logs
+from neyra.lab import neutral_texts
+from neyra.numerics import to_float
+from neyra.patch import Patch, diff_tensor
+from neyra.probe import SelectivityProbe, loop_spans
+from neyra.recover import recover
+from neyra.repair import apply_row, moments, neutral_energy, selective_row
+from neyra.runtime.mlx import MlxRuntime
+from neyra.stats import kl_from_logits
+from neyra.store import Checkpoint
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model")
@@ -97,5 +97,5 @@ for columns in (None, 64):
             name = f"selective cols={columns or 'all'} lam={lam} x{scale}"
             results.append(evaluate(name, tensors, rows_))
             Patch([diff_tensor(n, info[n]["dtype"], info[n]["base"], t[0]) for n, t in tensors.items()],
-                  {"method": name}).save(f"{a.save}/{name.replace(' ', '_').replace('=', '-')}.lesion")
+                  {"method": name}).save(f"{a.save}/{name.replace(' ', '_').replace('=', '-')}.neyra")
             Path(a.out).write_text(json.dumps(results, indent=1))

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from lesion.bisect import Measure, NoEffect, Search, bisect, confirm, rank_banzhaf
+from neyra.bisect import Measure, NoEffect, Search, bisect, confirm, rank_banzhaf
 
 
 def additive(weights, noise=0.0, seed=0):

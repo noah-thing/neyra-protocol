@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from lesion.numerics import to_float
-from lesion.runtime import Rollout
+from neyra.numerics import to_float
+from neyra.runtime import Rollout
 
 NAME = "model.layers.0.mlp.down_proj.weight"
 

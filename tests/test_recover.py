@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from conftest import bf16
 
-from lesion.numerics import to_float
-from lesion.recover import recover, shared_directions
+from neyra.numerics import to_float
+from neyra.recover import recover, shared_directions
 
 
 def weights(rng, shape=(256, 512)):

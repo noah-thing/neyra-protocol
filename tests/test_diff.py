@@ -3,8 +3,8 @@ import json
 import numpy as np
 from conftest import bf16
 
-from lesion.diff import compare
-from lesion.store import Checkpoint
+from neyra.diff import compare
+from neyra.store import Checkpoint
 
 
 def test_flags_template_tamper_and_removed_parts(model_dir, rng):

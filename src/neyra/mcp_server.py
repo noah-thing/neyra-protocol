@@ -23,7 +23,7 @@ edit you can compute with propose_from_file, as long as it comes as a patch or s
 
 
 def build(lab: Lab) -> MCPServer:
-    mcp = MCPServer("lesion", instructions=INSTRUCTIONS)
+    mcp = MCPServer("neyra", instructions=INSTRUCTIONS)
 
     @mcp.tool()
     def lab_status() -> dict:
@@ -65,7 +65,7 @@ def build(lab: Lab) -> MCPServer:
 
     @mcp.tool()
     def propose_from_file(path: str, note: str = "") -> dict:
-        """Candidate from any edit you computed: a .lesion patch or a safetensors checkpoint. Free."""
+        """Candidate from any edit you computed: a .neyra patch or a safetensors checkpoint. Free."""
         return lab.propose_from_file(path, note)
 
     @mcp.tool()
@@ -107,10 +107,10 @@ def build(lab: Lab) -> MCPServer:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(prog="lesion-mcp")
+    ap = argparse.ArgumentParser(prog="neyra-mcp")
     ap.add_argument("model")
     ap.add_argument("task", help="task definition, a JSON file")
-    ap.add_argument("--root", default=".lesion/lab")
+    ap.add_argument("--root", default=".neyra/lab")
     ap.add_argument("--passes", type=int, default=50)
     ap.add_argument("--submissions", type=int, default=1)
     ap.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])

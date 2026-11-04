@@ -120,15 +120,15 @@ class Patch:
             manifest.append({"name": e.name, "dtype": e.dtype, "shape": list(e.shape),
                              "base_sha256": e.base_sha256, "edited_sha256": e.edited_sha256})
         write_safetensors(path, tensors, {
-            "lesion": json.dumps({"format": FORMAT, "tensors": manifest, "meta": self.meta})
+            "neyra": json.dumps({"format": FORMAT, "tensors": manifest, "meta": self.meta})
         })
 
     @classmethod
     def load(cls, path: str | Path) -> Patch:
         refs, meta = parse_header(LocalBlob(Path(path)))
-        if "lesion" not in meta:
-            raise PatchMismatch(f"{path}: not a lesion patch")
-        doc = json.loads(meta["lesion"])
+        if "neyra" not in meta:
+            raise PatchMismatch(f"{path}: not a neyra patch")
+        doc = json.loads(meta["neyra"])
         if doc["format"] != FORMAT:
             raise PatchMismatch(f"{path}: patch format {doc['format']} is not supported")
 

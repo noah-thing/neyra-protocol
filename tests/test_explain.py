@@ -1,8 +1,8 @@
 import numpy as np
 from conftest import bf16
 
-from lesion.explain import readout
-from lesion.store import Checkpoint
+from neyra.explain import readout
+from neyra.store import Checkpoint
 
 
 def test_readout_finds_the_token_a_direction_writes(model_dir, rng):

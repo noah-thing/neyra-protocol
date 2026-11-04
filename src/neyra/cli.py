@@ -165,7 +165,7 @@ def cmd_verify(a) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="lesion", description=__doc__)
+    ap = argparse.ArgumentParser(prog="neyra", description=__doc__)
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 

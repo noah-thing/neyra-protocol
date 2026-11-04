@@ -5,11 +5,11 @@ import pytest
 from conftest import bf16
 from fakes import NAME, FakeRuntime
 
-from lesion.lab import BudgetSpent, Item, Lab, Refused, Task
-from lesion.ledger import verify
-from lesion.numerics import to_float
-from lesion.patch import Patch, diff_tensor
-from lesion.repair import project_columns
+from neyra.lab import BudgetSpent, Item, Lab, Refused, Task
+from neyra.ledger import verify
+from neyra.numerics import to_float
+from neyra.patch import Patch, diff_tensor
+from neyra.repair import project_columns
 
 SECRET_MARKER = "holdout-secret-question"
 
@@ -27,7 +27,7 @@ def setup(tmp_path, model_dir, rng, passes=10, submissions=1, alternatives=()):
 
 def real_edit(lab, w, u, tmp_path):
     bits = project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape)
-    p = tmp_path / "good.lesion"
+    p = tmp_path / "good.neyra"
     Patch([diff_tensor(NAME, "BF16", w, bits)]).save(p)
     return lab.propose_from_file(str(p))["candidate"]
 
@@ -48,7 +48,7 @@ def test_irrelevant_edit_fails_the_verdict(tmp_path, model_dir, rng):
     v -= (v @ u) * u
     v /= np.linalg.norm(v)
     bits = project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape)
-    p = tmp_path / "bad.lesion"
+    p = tmp_path / "bad.neyra"
     Patch([diff_tensor(NAME, "BF16", w, bits)]).save(p)
     r = lab.submit(lab.propose_from_file(str(p))["candidate"])
     assert r["verdict"] == "FAIL" and not r["gates"]["effect"]
@@ -83,12 +83,12 @@ def test_refuses_protected_tensors_and_scaling(tmp_path, model_dir, rng):
     emb = lab.ck.tensors["model.embed_tokens.weight"].read()
     changed = emb.copy()
     changed[0, 0] += 3
-    p = tmp_path / "emb.lesion"
+    p = tmp_path / "emb.neyra"
     Patch([diff_tensor("model.embed_tokens.weight", "BF16", emb, changed)]).save(p)
     with pytest.raises(Refused):
         lab.propose_from_file(str(p))
     scaled = bf16(to_float(w, "BF16") * 0.5)
-    p2 = tmp_path / "s.lesion"
+    p2 = tmp_path / "s.neyra"
     Patch([diff_tensor(NAME, "BF16", w, scaled)]).save(p2)
     with pytest.raises(Refused):
         lab.propose_from_file(str(p2))
@@ -130,7 +130,7 @@ def test_several_submissions_reveal_one_bit_and_stop_at_pass(tmp_path, model_dir
     v = rng.standard_normal(32)
     v -= (v @ u) * u
     v /= np.linalg.norm(v)
-    bad = tmp_path / "bad.lesion"
+    bad = tmp_path / "bad.neyra"
     Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape))]).save(bad)
     r = lab.submit(lab.propose_from_file(str(bad))["candidate"])
     assert r == {"verdict": "FAIL", "submissions_left": 2}

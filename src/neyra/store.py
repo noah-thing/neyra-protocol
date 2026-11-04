@@ -61,7 +61,7 @@ class HttpBlob:
     def _fetch(self, offset: int, length: int) -> tuple[bytes, str]:
         last: Exception | None = None
         for attempt in range(5):
-            headers = {"Range": f"bytes={offset}-{offset + length - 1}", "User-Agent": "lesion"}
+            headers = {"Range": f"bytes={offset}-{offset + length - 1}", "User-Agent": "neyra"}
             target = self.direct or self.url
             if self.token and self.direct is None:
                 headers["Authorization"] = f"Bearer {self.token}"
@@ -213,7 +213,7 @@ class Checkpoint:
             return f"{HF}/{repo}/resolve/{sha}/{f}"
 
         def read(f: str) -> bytes:
-            r = urllib.request.Request(url(f), headers={"User-Agent": "lesion"})
+            r = urllib.request.Request(url(f), headers={"User-Agent": "neyra"})
             with urllib.request.urlopen(r) as resp:
                 return resp.read()
 

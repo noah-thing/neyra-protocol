@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 from conftest import bf16
 
-from lesion.numerics import to_float
-from lesion.patch import Patch, PatchMismatch, bits_sha256, diff_tensor, make_patch
-from lesion.store import Checkpoint
+from neyra.numerics import to_float
+from neyra.patch import Patch, PatchMismatch, bits_sha256, diff_tensor, make_patch
+from neyra.store import Checkpoint
 
 
 def pair(model_dir, rng, dense=False):
@@ -27,8 +27,8 @@ def test_round_trip_is_bit_exact(tmp_path, model_dir, rng, dense):
     p = make_patch(a, b)
     assert [e.name for e in p.edits] == ["w"]
     assert p.edits[0].low_rank == dense
-    p.save(tmp_path / "e.lesion")
-    q = Patch.load(tmp_path / "e.lesion")
+    p.save(tmp_path / "e.neyra")
+    q = Patch.load(tmp_path / "e.neyra")
     assert q.fingerprint == p.fingerprint
     assert np.array_equal(q.apply(a)["w"], edited)
 
@@ -36,8 +36,8 @@ def test_round_trip_is_bit_exact(tmp_path, model_dir, rng, dense):
 def test_low_rank_is_smaller_than_sparse(model_dir, rng, tmp_path):
     a, b, w, _ = pair(model_dir, rng, dense=True)
     p = make_patch(a, b)
-    p.save(tmp_path / "e.lesion")
-    assert (tmp_path / "e.lesion").stat().st_size < w.nbytes
+    p.save(tmp_path / "e.neyra")
+    assert (tmp_path / "e.neyra").stat().st_size < w.nbytes
 
 
 def test_refuses_the_wrong_base(model_dir, rng):

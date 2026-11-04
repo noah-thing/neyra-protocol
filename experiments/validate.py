@@ -8,17 +8,17 @@ from pathlib import Path
 
 import numpy as np
 
-from lesion.behavior import score
-from lesion.interop import from_weight_space_logs
-from lesion.patch import Patch
-from lesion.runtime import Sampling
-from lesion.runtime.mlx import MlxRuntime
-from lesion.stats import paired
-from lesion.store import Checkpoint
+from neyra.behavior import score
+from neyra.interop import from_weight_space_logs
+from neyra.patch import Patch
+from neyra.runtime import Sampling
+from neyra.runtime.mlx import MlxRuntime
+from neyra.stats import paired
+from neyra.store import Checkpoint
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model")
-ap.add_argument("--variant", action="append", default=[], help="name=path, path to .lesion or edit dir")
+ap.add_argument("--variant", action="append", default=[], help="name=path, path to .neyra or edit dir")
 ap.add_argument("--practice", required=True)
 ap.add_argument("--per-source", type=int, default=32)
 ap.add_argument("--skip", type=int, default=32, help="problems per source already used for fitting")
@@ -43,7 +43,7 @@ sampling = Sampling(0.6, 0.95, 20, 1.5, 7)
 
 
 def load(path: str) -> Patch:
-    return Patch.load(path) if path.endswith(".lesion") else from_weight_space_logs(path)
+    return Patch.load(path) if path.endswith(".neyra") else from_weight_space_logs(path)
 
 
 results = {}

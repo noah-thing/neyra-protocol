@@ -3,8 +3,8 @@ import json
 from conftest import bf16
 from test_lab import real_edit, setup
 
-from lesion.cli import main
-from lesion.numerics import to_float
+from neyra.cli import main
+from neyra.numerics import to_float
 
 
 def test_diff_patch_apply_round_trip(tmp_path, model_dir, rng, capsys):
@@ -15,8 +15,8 @@ def test_diff_patch_apply_round_trip(tmp_path, model_dir, rng, capsys):
     b = model_dir("b", {"w": edited})
     assert main(["diff", str(a), str(b)]) == 0
     assert "1 changed" in capsys.readouterr().out
-    assert main(["patch", str(a), str(b), "-o", str(tmp_path / "p.lesion")]) == 0
-    assert main(["apply", str(a), str(tmp_path / "p.lesion"), "-o", str(tmp_path / "out")]) == 0
+    assert main(["patch", str(a), str(b), "-o", str(tmp_path / "p.neyra")]) == 0
+    assert main(["apply", str(a), str(tmp_path / "p.neyra"), "-o", str(tmp_path / "out")]) == 0
     assert main(["diff", str(b), str(tmp_path / "out")]) == 0
     assert "0 changed" in capsys.readouterr().out
 
@@ -34,7 +34,7 @@ def test_verify_catches_a_swapped_patch_and_edited_ledger(tmp_path, model_dir, r
     lab.submit(c)
     receipt = lab.root / f"{c}.receipt.json"
     ledger = lab.root / "ledger.jsonl"
-    patch = lab.root / f"{c}.lesion"
+    patch = lab.root / f"{c}.neyra"
     assert main(["verify", str(receipt), str(ledger), "--patch", str(patch)]) == 0
 
     doc = json.loads(receipt.read_text())

@@ -4,10 +4,10 @@ import numpy as np
 from conftest import bf16
 from safetensors_shim import read
 
-from lesion.export import factorize, gguf_tensor, to_peft
-from lesion.numerics import to_float
-from lesion.patch import make_patch
-from lesion.store import Checkpoint
+from neyra.export import factorize, gguf_tensor, to_peft
+from neyra.numerics import to_float
+from neyra.patch import make_patch
+from neyra.store import Checkpoint
 
 
 def test_factorize_keeps_rank_one_at_rank_one(rng):

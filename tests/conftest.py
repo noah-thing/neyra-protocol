@@ -3,8 +3,8 @@ import json
 import numpy as np
 import pytest
 
-from lesion.numerics import from_float
-from lesion.patch import write_safetensors
+from neyra.numerics import from_float
+from neyra.patch import write_safetensors
 
 
 def bf16(x):

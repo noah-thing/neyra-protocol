@@ -1,6 +1,6 @@
 import numpy as np
 
-from lesion.anytime import betting_process, rejects, sign_evalue
+from neyra.anytime import betting_process, rejects, sign_evalue
 
 
 def test_peeking_stays_near_alpha_under_the_null():

@@ -8,12 +8,12 @@ import json
 import time
 from pathlib import Path
 
-from lesion.bisect import bisect
-from lesion.interop import from_weight_space_logs
-from lesion.probe import SelectivityProbe, loop_spans
-from lesion.runtime.mlx import MlxRuntime
-from lesion.store import Checkpoint
-from lesion.units import UnitSet
+from neyra.bisect import bisect
+from neyra.interop import from_weight_space_logs
+from neyra.probe import SelectivityProbe, loop_spans
+from neyra.runtime.mlx import MlxRuntime
+from neyra.store import Checkpoint
+from neyra.units import UnitSet
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model")

@@ -1,9 +1,9 @@
 import numpy as np
 from conftest import bf16
 
-from lesion.numerics import to_float
-from lesion.recover import recover
-from lesion.repair import (
+from neyra.numerics import to_float
+from neyra.recover import recover
+from neyra.repair import (
     Layer,
     Plan,
     matched_random,

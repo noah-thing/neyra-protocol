@@ -9,18 +9,18 @@ import json
 import time
 from pathlib import Path
 
-from lesion.interop import from_weight_space_logs
-from lesion.probe import loop_spans
-from lesion.recover import recover
-from lesion.repair import Repair, down_proj_name
-from lesion.runtime.mlx import MlxRuntime
-from lesion.store import Checkpoint
+from neyra.interop import from_weight_space_logs
+from neyra.probe import loop_spans
+from neyra.recover import recover
+from neyra.repair import Repair, down_proj_name
+from neyra.runtime.mlx import MlxRuntime
+from neyra.store import Checkpoint
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model")
 ap.add_argument("edit_dir")
 ap.add_argument("rollouts")
-ap.add_argument("-o", "--out", default="fix.lesion")
+ap.add_argument("-o", "--out", default="fix.neyra")
 ap.add_argument("--report", default="fix_report.json")
 ap.add_argument("--columns", type=int, default=64)
 a = ap.parse_args()

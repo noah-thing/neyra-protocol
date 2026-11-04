@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from conftest import bf16
 
-from lesion.store import Checkpoint, FormatError, LocalBlob, parse_header
+from neyra.store import Checkpoint, FormatError, LocalBlob, parse_header
 
 
 def test_reads_raw_bits(model_dir, rng):

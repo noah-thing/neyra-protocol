@@ -4,7 +4,7 @@ import pytest
 from mcp.client.client import Client
 from test_lab import real_edit, setup
 
-from lesion.mcp_server import build
+from neyra.mcp_server import build
 
 
 def load(result):
