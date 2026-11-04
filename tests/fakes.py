@@ -45,7 +45,7 @@ class FakeRuntime:
         for p in prompts:
             fixed = self.repaired() and rng.random() < 0.9
             text = r"thinking</think> \boxed{4}" if fixed else "wait again " * 50
-            rows.append(Rollout(p, list(range(40)), text, not fixed))
+            rows.append(Rollout(p, list(range(40)) if fixed else [*range(30)] * 40, text, not fixed))
         return rows
 
     def logits_at(self, ids, positions):

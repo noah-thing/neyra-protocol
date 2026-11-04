@@ -32,7 +32,7 @@ print(len(units), "units", flush=True)
 
 rows = json.loads(Path(a.rollouts).read_text())
 ids = [rt.tokenizer.encode(r["text"], add_special_tokens=False) for r in rows]
-spans = loop_spans(ids, a.length, a.texts, minimum=64)
+spans = loop_spans(ids, a.length, a.texts)
 print(len(spans), "texts,", sum(s.target.sum() for s in spans), "target tokens", flush=True)
 
 probe = SelectivityProbe(rt, spans)

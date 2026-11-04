@@ -317,7 +317,7 @@ def parser() -> argparse.ArgumentParser:
     p = command("probe", cmd_probe, "run a model through a fixed battery and report what goes wrong")
     p.add_argument("model")
     p.add_argument("-n", type=int, default=32)
-    p.add_argument("--max-tokens", type=int, default=3072)
+    p.add_argument("--max-tokens", type=int, default=8192)
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
     p = command("export", cmd_export, "write a patch as a LoRA for PEFT or llama.cpp")

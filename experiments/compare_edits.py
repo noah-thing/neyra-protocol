@@ -29,7 +29,7 @@ rt = MlxRuntime(a.model)
 ck = Checkpoint.open(a.model)
 rows = json.loads(Path(a.rollouts).read_text())
 ids = [rt.tokenizer.encode(r["text"], add_special_tokens=False) for r in rows]
-spans = loop_spans(ids, 1024, minimum=48)
+spans = loop_spans(ids, 1024)
 half = len(spans) * 2 // 3
 fit, held = spans[:half], spans[half:]
 print(len(fit), "fit texts", len(held), "held out texts", flush=True)

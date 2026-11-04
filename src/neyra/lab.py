@@ -76,13 +76,13 @@ class Task:
     alternatives: list[dict] = field(default_factory=list)
 
     def outcome(self, rollout, item: Item) -> float:
-        o = score(rollout.text, rollout.hit_limit, item.answer)
+        o = score(rollout.text, rollout.tokens, rollout.hit_limit, self.max_tokens, item.answer)
         if self.metric == "correct":
             return float(bool(o.correct))
         if self.metric == "finished":
             return float(o.finished)
         if self.metric == "not_repeating":
-            return float(o.repeated < 0.25)
+            return float(not o.looping)
         raise ValueError(f"unknown metric {self.metric}")
 
     @classmethod
@@ -182,11 +182,11 @@ class Lab:
         scores, rows = self._run(items, seed)
         rid = f"r{len(self.rollouts)}"
         self.rollouts[rid] = rows
-        outcomes = [score(r.text, r.hit_limit, i.answer) for r, i in zip(rows, items)]
+        outcomes = [score(r.text, r.tokens, r.hit_limit, self.task.max_tokens, i.answer) for r, i in zip(rows, items)]
         result = {"rollouts": rid, "n": len(rows), "metric": float(scores.mean()),
                   "hit_limit": float(np.mean([r.hit_limit for r in rows])),
                   "closed_thinking": float(np.mean([o.closed for o in outcomes])),
-                  "repeated_share": float(np.mean([o.repeated for o in outcomes])),
+                  "looping": float(np.mean([o.looping for o in outcomes])),
                   "tails": [r.text[-200:] for r in rows[:3]]}
         self.ledger.append("sample", candidate=candidate, seed=seed, **{k: result[k] for k in ("n", "metric", "hit_limit")})
         return result

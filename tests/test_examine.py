@@ -13,7 +13,8 @@ class Scripted:
         return [1]
 
     def generate(self, prompts, max_tokens, sampling=None):
-        return [Rollout(p, list(range(50)), self.text, self.limit) for p in prompts]
+        tokens = ([*range(50)] * 40) if self.limit else list(range(50))
+        return [Rollout(p, tokens, self.text, self.limit) for p in prompts]
 
 
 def test_problems_are_reproducible_and_answers_check_out():
@@ -28,7 +29,7 @@ def test_problems_are_reproducible_and_answers_check_out():
 
 
 def test_probe_flags_a_looping_model():
-    exam = examine(Scripted("Wait, let me check the sum again carefully right now. " * 60, True), n=6)
+    exam = examine(Scripted("Wait, let me check the sum again.", True), n=6)
     names = {s.name: s for s in exam.symptoms}
     assert names["repetition loops"].severity == "serious"
     assert names["thinking never ends"].rate == 1.0

@@ -7,12 +7,61 @@ import numpy as np
 from mlx import nn
 from mlx.utils import tree_flatten
 from mlx_lm import load
-from mlx_lm.sample_utils import make_logits_processors, make_sampler
 
 from ..diff import canonical
 from . import Rollout, Sampling
 
 STORAGE = {"BF16": mx.bfloat16, "F16": mx.float16, "F32": mx.float32}
+
+
+def ordered_sampler(s: Sampling):
+    """Temperature, then top k, then top p, the order vLLM uses.
+
+    mlx-lm filters on the unscaled distribution first, which samples a different one.
+    With top k set, only those candidates are ever sorted.
+    """
+    if s.temperature == 0:
+        return lambda logprobs: mx.argmax(logprobs, axis=-1)
+    k = s.top_k
+
+    def sample(logprobs: mx.array) -> mx.array:
+        if k > 0:
+            index = mx.argpartition(-logprobs, k - 1, axis=-1)[..., :k]
+            scores = mx.take_along_axis(logprobs, index, axis=-1)
+        else:
+            index = mx.broadcast_to(mx.arange(logprobs.shape[-1]), logprobs.shape)
+            scores = logprobs
+        scores = scores / s.temperature
+        order = mx.argsort(-scores, axis=-1)
+        scores = mx.take_along_axis(scores, order, axis=-1)
+        index = mx.take_along_axis(index, order, axis=-1)
+        probs = mx.softmax(scores, axis=-1)
+        before = mx.cumsum(probs, axis=-1) - probs
+        scores = mx.where(before < s.top_p, scores, -mx.inf)
+        choice = mx.random.categorical(scores)
+        return mx.take_along_axis(index, choice[..., None], axis=-1)[..., 0]
+
+    return sample
+
+
+def output_presence(penalty: float, prompt_length: int):
+    """Presence penalty over generated tokens only, as in vLLM.
+
+    The stock processor also counts the prompt, which on a maths problem penalises
+    repeating the numbers in the question.
+    """
+    mask = None
+
+    def apply(tokens, logits: mx.array) -> mx.array:
+        nonlocal mask
+        if len(tokens) <= prompt_length:
+            return logits
+        if mask is None:
+            mask = mx.zeros((logits.shape[-1],), dtype=logits.dtype)
+        mask[tokens[-1]] = penalty
+        return logits - mask
+
+    return apply
 
 
 class MlxRuntime:
@@ -50,22 +99,24 @@ class MlxRuntime:
 
     def generate(self, prompts: list[list[int]], max_tokens: int, sampling: Sampling | None = None,
                  batch: int = 32) -> list[Rollout]:
-        sampling = sampling or Sampling()
+        s = sampling or Sampling()
         gen = sys.modules["mlx_lm.generate"]
-        mx.random.seed(sampling.seed)
-        processors = None
-        if sampling.presence_penalty:
-            processors = make_logits_processors(presence_penalty=sampling.presence_penalty,
-                                                presence_context_size=max_tokens + 8192)
-        out = gen.batch_generate(
-            self.model, self.tokenizer, prompts, max_tokens=max_tokens,
-            sampler=make_sampler(temp=sampling.temperature, top_p=sampling.top_p, top_k=sampling.top_k),
-            logits_processors=processors, completion_batch_size=batch, return_token_ids=True)
-        rows = []
-        for prompt, text, ids in zip(prompts, out.texts, out.token_ids):
-            ids = [int(t) for t in ids]
-            rows.append(Rollout(prompt, ids, text, len(ids) >= max_tokens))
-        return rows
+        mx.random.seed(s.seed)
+        engine = gen.BatchGenerator(self.model, stop_tokens=[[t] for t in self.tokenizer.eos_token_ids],
+                                    sampler=ordered_sampler(s), completion_batch_size=batch)
+        processors = [[output_presence(s.presence_penalty, len(p))] for p in prompts] if s.presence_penalty else None
+        uids = engine.insert(prompts, [max_tokens] * len(prompts), logits_processors=processors)
+        tokens: dict[int, list[int]] = {u: [] for u in uids}
+        capped: dict[int, bool] = {}
+        while responses := engine.next_generated():
+            for r in responses:
+                if r.finish_reason != "stop":
+                    tokens[r.uid].append(int(r.token))
+                if r.finish_reason is not None:
+                    capped[r.uid] = r.finish_reason == "length"
+        engine.close()
+        return [Rollout(p, tokens[u], self.tokenizer.decode(tokens[u]), capped.get(u, True))
+                for p, u in zip(prompts, uids)]
 
     def _head(self):
         lm = getattr(self.model, "language_model", self.model)

@@ -3,120 +3,120 @@
  "conditions": [
   {
    "condition": "writer projection k=64 a=6",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999999650113844,
-   "alpha_rel_error": 1.4858141258307828e-05,
+   "direction_cos": 0.9999999635457718,
+   "alpha_rel_error": 1.1815445186987478e-05,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "writer projection k=64 a=1",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999989693043119,
-   "alpha_rel_error": 4.2616134726669586e-05,
+   "direction_cos": 0.9999990600157989,
+   "alpha_rel_error": 3.568831063643918e-05,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "writer projection k=8 a=2",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999990522035919,
-   "alpha_rel_error": 6.448874971476393e-05,
+   "direction_cos": 0.9999990752098669,
+   "alpha_rel_error": 5.061063130062937e-05,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "writer projection k=512 a=1",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999995654659861,
-   "alpha_rel_error": 2.0457587605049454e-05,
+   "direction_cos": 0.9999994616979153,
+   "alpha_rel_error": 1.9862833263661894e-05,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "random projection k=64 a=6",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999992520662315,
-   "alpha_rel_error": 0.00013944928581436738,
+   "direction_cos": 0.9999992619112509,
+   "alpha_rel_error": 0.0001738671025651358,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "random projection k=64 a=1",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999690866976362,
-   "alpha_rel_error": 0.0007326332263316582,
+   "direction_cos": 0.9999709284043932,
+   "alpha_rel_error": 0.0009376195556252132,
    "column_f1": 1.0,
    "rank_exact": null
   },
   {
    "condition": "random projection k=512 a=1",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "projection": 10
+    "projection": 50
    },
-   "direction_cos": 0.9999914327770105,
-   "alpha_rel_error": 0.00010851443283033113,
-   "column_f1": 0.9999022482893452,
+   "direction_cos": 0.9999906568430383,
+   "alpha_rel_error": 0.0001851442655242952,
+   "column_f1": 0.9999413489736071,
    "rank_exact": null
   },
   {
    "condition": "full projection a=1",
-   "n": 10,
-   "form_accuracy": 0.9,
+   "n": 50,
+   "form_accuracy": 0.8,
    "forms": {
-    "projection": 9,
-    "rank": 1
+    "projection": 40,
+    "rank": 10
    },
-   "direction_cos": 0.9999935666827456,
-   "alpha_rel_error": 8.305389211982206e-05,
-   "column_f1": 0.9999860471605972,
+   "direction_cos": 0.999993112387757,
+   "alpha_rel_error": 0.00010409581232329046,
+   "column_f1": 0.9999679074471877,
    "rank_exact": null
   },
   {
    "condition": "input projection a=1",
-   "n": 10,
-   "form_accuracy": 0.7,
+   "n": 50,
+   "form_accuracy": 0.68,
    "forms": {
-    "projection": 7,
-    "rank": 3
+    "projection": 34,
+    "rank": 16
    },
    "direction_cos": null,
-   "alpha_rel_error": 0.0005772295688115658,
+   "alpha_rel_error": 0.0003247813004663702,
    "column_f1": null,
    "rank_exact": null
   },
   {
    "condition": "additive rank 1",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "rank": 10
+    "rank": 50
    },
    "direction_cos": null,
    "alpha_rel_error": null,
@@ -125,10 +125,10 @@
   },
   {
    "condition": "additive rank 2",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "rank": 10
+    "rank": 50
    },
    "direction_cos": null,
    "alpha_rel_error": null,
@@ -137,10 +137,10 @@
   },
   {
    "condition": "additive rank 8",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "rank": 10
+    "rank": 50
    },
    "direction_cos": null,
    "alpha_rel_error": null,
@@ -149,10 +149,10 @@
   },
   {
    "condition": "zeroed 256 columns",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "zeroed": 10
+    "zeroed": 50
    },
    "direction_cos": null,
    "alpha_rel_error": null,
@@ -161,10 +161,10 @@
   },
   {
    "condition": "scaled 0.9",
-   "n": 10,
+   "n": 50,
    "form_accuracy": 1.0,
    "forms": {
-    "scaled": 10
+    "scaled": 50
    },
    "direction_cos": null,
    "alpha_rel_error": 1.235611570628138e-05,
@@ -174,6 +174,6 @@
  ],
  "rounding_only": {
   "resave_changed_bits": 0,
-  "rounding": 50
+  "rounding": 250
  }
 }

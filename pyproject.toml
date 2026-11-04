@@ -18,6 +18,7 @@ mlx = ["mlx-lm>=0.32"]
 torch = ["torch>=2.6", "transformers>=5.0", "accelerate"]
 mcp = ["mcp>=2.0"]
 gguf = ["gguf>=0.17"]
+eval = ["math-verify>=0.9"]
 dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0"]
 
 [project.scripts]

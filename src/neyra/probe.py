@@ -6,18 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .behavior import loop_onset, repeat_flags
 from .bisect import Measure
-
-
-def repeated_mask(tokens: list[int], start: int, n: int = 12) -> np.ndarray:
-    """True at each position whose preceding n tokens, itself included, appeared earlier."""
-    out = np.zeros(len(tokens), dtype=bool)
-    seen: set[tuple[int, ...]] = set()
-    for i in range(start + n, len(tokens)):
-        gram = tuple(tokens[i - n + 1:i + 1])
-        out[i] = gram in seen
-        seen.add(gram)
-    return out
 
 
 @dataclass
@@ -28,17 +18,23 @@ class Span:
     keep: np.ndarray  # positions it should leave alone
 
 
-def loop_spans(token_lists: list[list[int]], length: int = 1536, limit: int | None = None,
-               minimum: int = 32) -> list[Span]:
-    """Windows around where each text starts repeating, target being the repeated tokens."""
+def loop_spans(token_lists: list[list[int]], length: int = 1024, limit: int | None = None,
+               lead: int = 200) -> list[Span]:
+    """Windows opening just before each terminal loop. Target is the repeated tokens inside.
+
+    Anchoring on the first repeated phrase is wrong: careful reasoning restates itself
+    long before anything loops, so such a window holds no loop at all.
+    """
     spans = []
     for ids in token_lists:
-        mask = repeated_mask(ids, 0)
-        if mask.sum() < minimum:
+        onset = loop_onset(ids)
+        if onset is None:
             continue
-        lo = max(0, int(np.argmax(mask)) - length // 2)
-        m = mask[lo:lo + length]
-        spans.append(Span(ids[lo:lo + length], 1, m, ~m))
+        lo = max(0, onset - lead)
+        window = ids[lo:lo + length]
+        target = np.array(repeat_flags(ids)[lo:lo + length])
+        target[:max(onset - lo, 0)] = False
+        spans.append(Span(window, 1, target, ~target))
     return spans[:limit]
 
 

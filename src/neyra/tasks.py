@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-SUFFIX = " Please reason step by step, and put your final answer within \\boxed{}."
+SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 
 
 @dataclass
