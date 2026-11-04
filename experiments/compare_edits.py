@@ -11,6 +11,7 @@ from neyra.lab import neutral_texts
 from neyra.numerics import to_float
 from neyra.patch import Patch, diff_tensor
 from neyra.probe import SelectivityProbe, loop_spans
+from neyra.protocol import tensor_table
 from neyra.recover import recover
 from neyra.repair import apply_row, moments, neutral_energy, selective_row
 from neyra.runtime.mlx import MlxRuntime
@@ -45,8 +46,9 @@ def neutral_logits():
 
 rt.reset()
 reference = neutral_logits()
+table = tensor_table(ck)
 
-astra = from_weight_space_logs(a.edit_dir)
+astra = from_weight_space_logs(a.edit_dir, ck)
 info = {}
 for e in astra.edits:
     layer = int(e.name.split("layers.")[1].split(".")[0])
@@ -97,5 +99,5 @@ for columns in (None, 64):
             name = f"selective cols={columns or 'all'} lam={lam} x{scale}"
             results.append(evaluate(name, tensors, rows_))
             Patch([diff_tensor(n, info[n]["dtype"], info[n]["base"], t[0]) for n, t in tensors.items()],
-                  {"method": name}).save(f"{a.save}/{name.replace(' ', '_').replace('=', '-')}.neyra")
+                  {"method": name}).bind(table).save(f"{a.save}/{name.replace(' ', '_').replace('=', '-')}.neyra")
             Path(a.out).write_text(json.dumps(results, indent=1))

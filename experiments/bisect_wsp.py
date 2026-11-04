@@ -27,7 +27,7 @@ a = ap.parse_args()
 
 rt = MlxRuntime(a.model)
 ck = Checkpoint.open(a.model)
-units = UnitSet(from_weight_space_logs(a.edit_dir), ck, "column")
+units = UnitSet(from_weight_space_logs(a.edit_dir, ck), ck, "column")
 print(len(units), "units", flush=True)
 
 rows = json.loads(Path(a.rollouts).read_text())

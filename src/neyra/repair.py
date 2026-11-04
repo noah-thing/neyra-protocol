@@ -16,6 +16,7 @@ from .families import writers
 from .numerics import from_float, to_float
 from .patch import Patch, diff_tensor
 from .probe import SelectivityProbe, Span
+from .protocol import tensor_table
 from .store import Checkpoint
 
 
@@ -190,7 +191,7 @@ class Repair:
             edits.append(diff_tensor(name, dtype, self.base[name], bits))
         return Patch(edits, {"method": "difference of means, column projection",
                              "layers": [l.index for l in plan.layers], "alpha": plan.alpha,
-                             "columns": self.k, **(meta or {})})
+                             "columns": self.k, **(meta or {})}).bind(tensor_table(self.ck))
 
 
 def matched_random(plan: Plan, seed: int = 0) -> list[Layer]:

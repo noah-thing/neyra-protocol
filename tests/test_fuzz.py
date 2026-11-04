@@ -10,13 +10,12 @@ from hypothesis import strategies as st
 
 from neyra.numerics import from_float, to_float
 from neyra.patch import (
-    Patch,
     PatchMismatch,
     TensorEdit,
-    bits_sha256,
     diff_tensor,
     write_safetensors,
 )
+from neyra.protocol import bits_digest
 from neyra.recover import recover
 from neyra.store import FormatError, LocalBlob, parse_header
 
@@ -114,16 +113,16 @@ def test_any_edit_round_trips_exactly(rows, cols, density, seed):
     edited[picks] = bf16(rng.standard_normal(int(picks.sum())))
     e = diff_tensor("w", "BF16", w, edited)
     assert np.array_equal(e.apply(w), edited)
-    assert bits_sha256(e.apply(w)) == bits_sha256(edited)
+    assert bits_digest("BF16", e.apply(w)) == bits_digest("BF16", edited)
 
 
 def test_patch_with_out_of_range_indices_is_rejected(tmp_path, rng):
     w = bf16(rng.standard_normal((4, 4)))
-    bad = TensorEdit("w", "BF16", (4, 4), bits_sha256(w), None, np.array([999]), np.array([1], dtype=np.uint16))
-    Patch([bad]).save(tmp_path / "p.neyra")
+    bad = TensorEdit("w", "BF16", (4, 4), bits_digest("BF16", w), "x", np.array([999]), np.array([1], dtype=np.uint16))
     try:
-        Patch.load(tmp_path / "p.neyra").edits[0].apply(w)
-    except PatchMismatch:
+        bad.apply(w)
+    except PatchMismatch as e:
+        assert e.code == "bad_index"
         return
     raise AssertionError("an index outside the tensor must be a PatchMismatch")
 

@@ -3,7 +3,8 @@ import pytest
 from conftest import bf16
 
 from neyra.numerics import to_float
-from neyra.patch import Patch, PatchMismatch, bits_sha256, diff_tensor, make_patch
+from neyra.patch import Patch, PatchMismatch, diff_tensor, make_patch
+from neyra.protocol import bits_digest, weights_root
 from neyra.store import Checkpoint
 
 
@@ -29,7 +30,7 @@ def test_round_trip_is_bit_exact(tmp_path, model_dir, rng, dense):
     assert p.edits[0].low_rank == dense
     p.save(tmp_path / "e.neyra")
     q = Patch.load(tmp_path / "e.neyra")
-    assert q.fingerprint == p.fingerprint
+    assert q.id == p.id
     assert np.array_equal(q.apply(a)["w"], edited)
 
 
@@ -58,9 +59,40 @@ def test_dense_expansion_matches_low_rank(model_dir, rng):
     a, b, w, edited = pair(model_dir, rng, dense=True)
     e = make_patch(a, b).edits[0]
     assert np.array_equal(e.dense(w).apply(w), edited)
-    assert bits_sha256(edited) == e.edited_sha256
+    assert bits_digest("BF16", edited) == e.result_digest
 
 
 def test_diff_tensor_identical_is_empty(rng):
     w = bf16(rng.standard_normal((8, 8)))
     assert len(diff_tensor("w", "BF16", w, w.copy()).idx) == 0
+
+
+def test_roots_bind_the_whole_model(model_dir, rng):
+    a, b, *_ = pair(model_dir, rng)
+    p = make_patch(a, b)
+    assert p.base_root == weights_root(a) and p.result_root == weights_root(b)
+
+
+def test_untouched_tensor_differing_is_a_different_base(model_dir, rng):
+    a, b, w, _ = pair(model_dir, rng)
+    p = make_patch(a, b)
+    other = Checkpoint.open(str(model_dir("c", {"w": w, "keep": bf16(np.ones(16))})))
+    assert p.apply(other)
+    with pytest.raises(PatchMismatch):
+        p.check_base(other)
+
+
+def test_tampered_payload_is_caught(tmp_path, model_dir, rng):
+    a, b, *_ = pair(model_dir, rng)
+    make_patch(a, b).save(tmp_path / "e.neyra")
+    raw = bytearray((tmp_path / "e.neyra").read_bytes())
+    raw[-3] ^= 0xFF
+    (tmp_path / "e.neyra").write_bytes(bytes(raw))
+    with pytest.raises(PatchMismatch):
+        Patch.load(tmp_path / "e.neyra")
+
+
+def test_meta_does_not_change_identity(model_dir, rng):
+    a, b, *_ = pair(model_dir, rng)
+    p, q = make_patch(a, b, {"note": "x"}), make_patch(a, b, {"note": "y"})
+    assert p.id == q.id

@@ -1,3 +1,4 @@
+import base64
 import json
 
 from conftest import bf16
@@ -5,6 +6,7 @@ from test_lab import real_edit, setup
 
 from neyra.cli import main
 from neyra.numerics import to_float
+from neyra.protocol import jcs
 
 
 def test_diff_patch_apply_round_trip(tmp_path, model_dir, rng, capsys):
@@ -28,28 +30,33 @@ def test_diff_exits_nonzero_on_high_severity(model_dir, rng):
     assert main(["diff", str(a), str(b)]) == 1
 
 
-def test_verify_catches_a_swapped_patch_and_edited_ledger(tmp_path, model_dir, rng, capsys):
+def test_signed_receipt_round_trip_and_tampering(tmp_path, model_dir, rng, capsys):
+    key = tmp_path / "k.key"
+    assert main(["keygen", "-o", str(key)]) == 0
     lab, w, u = setup(tmp_path, model_dir, rng)
+    lab.key = bytes.fromhex(key.read_text())
     c = real_edit(lab, w, u, tmp_path)
     lab.submit(c)
-    receipt = lab.root / f"{c}.receipt.json"
-    ledger = lab.root / "ledger.jsonl"
-    patch = lab.root / f"{c}.neyra"
-    assert main(["verify", str(receipt), str(ledger), "--patch", str(patch)]) == 0
+    receipt, ledger, patch = lab.root / f"{c}.receipt.json", lab.root / "ledger.jsonl", lab.root / f"{c}.neyra"
+    pub = str(key.with_suffix(".pub"))
+    args = ["verify", str(receipt), "--ledger", str(ledger), "--patch", str(patch), "--key", pub]
+    assert main(args) == 0
+    assert "signature verified" in capsys.readouterr().out
 
     doc = json.loads(receipt.read_text())
-    doc["fingerprint"] = "0" * 64
+    original = doc["payload"]
+    body = json.loads(base64.b64decode(original))
+    body["predicate"]["claim"]["verdict"] = "FAIL"
+    doc["payload"] = base64.b64encode(jcs(body)).decode()
     receipt.write_text(json.dumps(doc))
-    assert main(["verify", str(receipt), str(ledger), "--patch", str(patch)]) == 5
+    assert main(args) == 5
 
+    doc["payload"] = original
+    receipt.write_text(json.dumps(doc))
     lines = ledger.read_text().splitlines()
-    entry = json.loads(lines[-1])
-    entry["body"]["verdict"] = "PASS?"
-    lines[-1] = json.dumps(entry)
+    lines[0] = lines[0].replace('"task":"t"', '"task":"z"')
     ledger.write_text("\n".join(lines) + "\n")
-    assert main(["verify", str(receipt), str(ledger)]) == 5
-
-
+    assert main(args) == 5
 
 
 def test_demo_runs_and_recovers(capsys):

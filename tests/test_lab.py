@@ -28,7 +28,7 @@ def setup(tmp_path, model_dir, rng, passes=10, submissions=1, alternatives=()):
 def real_edit(lab, w, u, tmp_path):
     bits = project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape)
     p = lab.root / "good.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, bits)]).save(p)
+    Patch([diff_tensor(NAME, "BF16", w, bits)]).bind(lab.table).save(p)
     return lab.propose_from_file(str(p))["candidate"]
 
 
@@ -39,7 +39,7 @@ def test_good_edit_passes_and_receipt_chains(tmp_path, model_dir, rng):
     assert r["verdict"] == "PASS", r["gates"]
     head, _ = verify(lab.root / "ledger.jsonl")
     assert r["ledger_head"] == head
-    assert json.loads((lab.root / f"{c}.receipt.json").read_text())["fingerprint"] == r["fingerprint"]
+    assert json.loads((lab.root / f"{c}.claim.json").read_text())["patch_id"] == r["patch_id"]
 
 
 def test_irrelevant_edit_fails_the_verdict(tmp_path, model_dir, rng):
@@ -49,7 +49,7 @@ def test_irrelevant_edit_fails_the_verdict(tmp_path, model_dir, rng):
     v /= np.linalg.norm(v)
     bits = project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape)
     p = lab.root / "bad.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, bits)]).save(p)
+    Patch([diff_tensor(NAME, "BF16", w, bits)]).bind(lab.table).save(p)
     r = lab.submit(lab.propose_from_file(str(p))["candidate"])
     assert r["verdict"] == "FAIL" and not r["gates"]["effect"]
 
@@ -84,12 +84,12 @@ def test_refuses_protected_tensors_and_scaling(tmp_path, model_dir, rng):
     changed = emb.copy()
     changed[0, 0] += 3
     p = lab.root / "emb.neyra"
-    Patch([diff_tensor("model.embed_tokens.weight", "BF16", emb, changed)]).save(p)
+    Patch([diff_tensor("model.embed_tokens.weight", "BF16", emb, changed)]).bind(lab.table).save(p)
     with pytest.raises(Refused):
         lab.propose_from_file(str(p))
     scaled = bf16(to_float(w, "BF16") * 0.5)
     p2 = lab.root / "s.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, scaled)]).save(p2)
+    Patch([diff_tensor(NAME, "BF16", w, scaled)]).bind(lab.table).save(p2)
     with pytest.raises(Refused):
         lab.propose_from_file(str(p2))
 
@@ -131,7 +131,7 @@ def test_several_submissions_reveal_one_bit_and_stop_at_pass(tmp_path, model_dir
     v -= (v @ u) * u
     v /= np.linalg.norm(v)
     bad = lab.root / "bad.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape))]).save(bad)
+    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", v, np.arange(48), 1.0).reshape(w.shape))]).bind(lab.table).save(bad)
     r = lab.submit(lab.propose_from_file(str(bad))["candidate"])
     assert r == {"verdict": "FAIL", "submissions_left": 2}
     good = real_edit(lab, w, u, tmp_path)
@@ -143,7 +143,7 @@ def test_several_submissions_reveal_one_bit_and_stop_at_pass(tmp_path, model_dir
 def test_agent_cannot_reach_outside_the_lab(tmp_path, model_dir, rng):
     lab, w, u = setup(tmp_path, model_dir, rng)
     secret = tmp_path / "private.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape))]).save(secret)
+    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape))]).bind(lab.table).save(secret)
     for path in (str(secret), str(lab.root / ".." / "private.neyra"), "/etc/passwd"):
         with pytest.raises(Refused):
             lab.propose_from_file(path)
@@ -159,7 +159,7 @@ def test_allowed_directory_is_opt_in(tmp_path, model_dir, rng):
     extra.mkdir()
     lab.roots.append(extra.resolve())
     p = extra / "e.neyra"
-    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape))]).save(p)
+    Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape))]).bind(lab.table).save(p)
     assert lab.propose_from_file(str(p))["candidate"] == "c0"
 
 

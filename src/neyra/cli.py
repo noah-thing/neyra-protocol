@@ -16,10 +16,11 @@ import numpy as np
 
 from . import __version__
 from .diff import Report, compare
-from .ledger import BrokenChain
+from .ledger import BrokenChain, head_in, read_entries
 from .ledger import verify as verify_ledger
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
+from .protocol import ProtocolError, new_key, open_envelope, strict_loads
 from .store import Checkpoint, FormatError
 
 SCHEMA = 1
@@ -115,14 +116,17 @@ def cmd_patch(a) -> int:
     base, other = Checkpoint.open(a.base), Checkpoint.open(a.other)
     p = make_patch(base, other, {"base": base.spec, "other": other.spec})
     p.save(a.out)
-    emit(a, {"tensors": len(p.edits), "entries": p.entries, "path": a.out, "fingerprint": p.fingerprint},
-         f"{len(p.edits)} tensors, {p.entries:,} stored entries -> {a.out}\nfingerprint {p.fingerprint}")
+    emit(a, {"tensors": len(p.edits), "entries": p.entries, "path": a.out, "patch_id": p.id,
+             "base_root": p.base_root, "result_root": p.result_root},
+         f"{len(p.edits)} tensors, {p.entries:,} stored entries -> {a.out}\npatch {p.id}")
     return OK
 
 
 def cmd_apply(a) -> int:
     base = Checkpoint.open(a.base)
-    edited = Patch.load(a.patch).apply(base)
+    patch = Patch.load(a.patch)
+    patch.check_base(base)
+    edited = patch.apply(base)
     write_checkpoint(base, edited, a.out)
     emit(a, {"tensors": len(edited), "path": a.out}, f"{len(edited)} tensors rebuilt and hash verified -> {a.out}")
     return OK
@@ -131,11 +135,13 @@ def cmd_apply(a) -> int:
 def cmd_show(a) -> int:
     p = Patch.load(a.patch)
     rows = [{"tensor": e.name, "shape": list(e.shape), "form": "low rank" if e.low_rank else "sparse",
-             "stored_entries": len(e.idx), "base_sha256": e.base_sha256} for e in p.edits]
-    text = [f"fingerprint {p.fingerprint}", f"{Path(a.patch).stat().st_size:,} bytes"]
+             "stored_entries": len(e.idx), "base_digest": e.base_digest} for e in p.edits]
+    text = [f"patch  {p.id}", f"base   {p.base_root}", f"result {p.result_root}",
+            f"{Path(a.patch).stat().st_size:,} bytes"]
     text += [f"{k}: {v}" for k, v in p.meta.items()]
     text += [f"{r['tensor']}  {r['form']}, {r['stored_entries']:,} stored entries" for r in rows]
-    emit(a, {"fingerprint": p.fingerprint, "meta": p.meta, "tensors": rows}, "\n".join(text))
+    emit(a, {"patch_id": p.id, "base_root": p.base_root, "result_root": p.result_root, "meta": p.meta,
+             "tensors": rows}, "\n".join(text))
     return OK
 
 
@@ -182,38 +188,45 @@ def cmd_export(a) -> int:
 
 
 def cmd_verify(a) -> int:
-    receipt = json.loads(Path(a.receipt).read_text())
+    public = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+    opened = open_envelope(strict_loads(Path(a.receipt).read_text()), public)
+    predicate = opened.statement["predicate"]
+    claim = predicate["claim"]
     problems = []
-    text = []
-    try:
-        head, count = verify_ledger(Path(a.ledger))
-        hashes = {json.loads(x)["hash"] for x in Path(a.ledger).read_text().splitlines()}
-        if receipt["ledger_head"] not in hashes:
-            problems.append("receipt head is not in this ledger")
-        text.append(f"ledger intact, {count} entries, head {head[:16]}")
-    except BrokenChain as e:
-        problems.append(f"ledger: {e}")
+    text = [f"statement well formed, {'signature verified' if opened.signed else 'NOT signed: an unauthenticated record'}"]
+    if a.ledger:
+        try:
+            head, count = verify_ledger(Path(a.ledger))
+            if not head_in(Path(a.ledger), predicate["ledger_head"]):
+                problems.append("receipt head is not in this ledger")
+            text.append(f"ledger intact, {count} entries, head {head[7:23]}")
+        except BrokenChain as e:
+            problems.append(str(e))
     if a.patch:
-        got = Patch.load(a.patch).fingerprint
-        if got != receipt["fingerprint"]:
-            problems.append("patch fingerprint does not match the receipt")
+        got = Patch.load(a.patch)
+        if got.id != claim["patch_id"] or got.result_root != claim["result_root"]:
+            problems.append("patch does not match the receipt")
         else:
-            text.append(f"patch matches receipt, {got[:16]}")
-    text.append(f"verdict in receipt: {receipt['verdict']}")
-    text += [f"  {'pass' if ok else 'FAIL'}  {key}" for key, ok in receipt["gates"].items()]
+            text.append(f"patch matches receipt, {got.id[7:23]}")
+    text.append(f"verdict in receipt: {claim['verdict']}")
+    text += [f"  {'pass' if ok else 'FAIL'}  {key}" for key, ok in claim["gates"].items()]
     text += [f"problem: {p}" for p in problems]
-    emit(a, {"verdict": receipt["verdict"], "gates": receipt["gates"], "problems": problems}, "\n".join(text))
+    text.append("a signature shows who made this claim, not that it is true; rerun it to check that")
+    emit(a, {"verdict": claim["verdict"], "gates": claim["gates"], "signed": opened.signed, "problems": problems},
+         "\n".join(text))
     return FAILED if problems else OK
+
+
+def cmd_keygen(a) -> int:
+    key = new_key(a.out)
+    emit(a, {"keyid": key, "path": a.out}, f"{key}\nprivate key {a.out}, public key {Path(a.out).with_suffix('.pub')}")
+    return OK
 
 
 def cmd_log(a) -> int:
     verify_ledger(Path(a.ledger))
-    entries = [json.loads(x) for x in Path(a.ledger).read_text().splitlines()]
-    text = []
-    for e in entries:
-        b = e["body"]
-        rest = {k: v for k, v in b.items() if k not in ("seq", "time", "kind")}
-        text.append(f"{b['seq']:>4}  {e['hash'][:10]}  {b['kind']:<14} {json.dumps(rest, default=str)[:90]}")
+    entries, _ = read_entries(Path(a.ledger))
+    text = [f"{e['seq']:>4}  {e['time']}  {e['kind']:<14} {json.dumps(e['body'])[:90]}" for e in entries]
     emit(a, {"entries": entries}, "\n".join(text))
     return OK
 
@@ -256,7 +269,8 @@ def cmd_demo(a) -> int:
         root = Path(tmp)
         for label, bits in (("base", w), ("edited", edited)):
             (root / label).mkdir()
-            write_safetensors(root / label / "model.safetensors", {name: bits, "model.norm.weight": other}, {"format": "pt"})
+            write_safetensors(root / label / "model.safetensors", {name: bits, "model.norm.weight": other}, {"format": "pt"},
+                              "BF16")
         base, changed = Checkpoint.open(str(root / "base")), Checkpoint.open(str(root / "edited"))
         print("planted: W' = W - 4 u(uᵀW) on 32 random columns of a 256 x 1024 matrix\n")
         print("$ neyra diff base edited")
@@ -328,10 +342,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--energy", type=float, default=0.999, help="share of the change to keep")
     p.add_argument("-o", "--out", required=True)
 
-    p = command("verify", cmd_verify, "check a lab receipt against its ledger and patch")
+    p = command("verify", cmd_verify, "check a receipt, and optionally its ledger, patch and signature")
     p.add_argument("receipt")
-    p.add_argument("ledger")
+    p.add_argument("--ledger")
     p.add_argument("--patch")
+    p.add_argument("--key", help="public key file")
+
+    p = command("keygen", cmd_keygen, "create an ed25519 key for signing receipts")
+    p.add_argument("-o", "--out", default="neyra.key")
 
     p = command("log", cmd_log, "print a lab ledger after checking its chain")
     p.add_argument("ledger")
@@ -366,11 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     except (FormatError, json.JSONDecodeError) as e:
         print(f"neyra: bad input: {e}", file=sys.stderr)
         return BAD_INPUT
-    except PatchMismatch as e:
+    except (PatchMismatch, ProtocolError) as e:
         print(f"neyra: {e}", file=sys.stderr)
-        return FAILED
-    except BrokenChain as e:
-        print(f"neyra: ledger has been altered: {e}", file=sys.stderr)
         return FAILED
     except urllib.error.HTTPError as e:
         hint = "check the repo name, or set HF_TOKEN for a gated model" if e.code in (401, 403, 404) else "try again"

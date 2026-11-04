@@ -12,10 +12,9 @@ the holdout from disk, so anything adversarial needs the lab on a separate host.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
-import time
+import secrets
 from dataclasses import asdict, dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -27,16 +26,22 @@ from .behavior import score
 from .bisect import Measure, bisect, confirm
 from .ledger import Ledger
 from .numerics import from_float, is_float, to_float
-from .patch import Patch, TensorEdit, bits_sha256, diff_tensor
+from .patch import Patch, TensorEdit, diff_tensor
 from .probe import SelectivityProbe, Span, loop_spans
+from .protocol import decimal, digest, envelope, jcs, plain, root_of, statement_for, tensor_table
 from .recover import recover
 from .repair import Layer, Plan, Repair, down_proj_name, matched_random, project_columns
 from .runtime import Sampling
-from .stats import kl_from_logits, paired
+from .stats import Paired, kl_from_logits, paired
 from .store import Checkpoint
 from .units import UnitSet
 
 PROTECTED = re.compile(r"embed_tokens|lm_head|(^|\.)norm\.weight$")
+
+
+def statement(metric: str, p: Paired) -> dict:
+    return {"metric": metric, "estimate": decimal(p.difference), "ci_low": decimal(p.low), "ci_high": decimal(p.high),
+            "n": p.n, "method": "paired bootstrap"}
 
 
 class BudgetSpent(RuntimeError):
@@ -117,11 +122,11 @@ def neutral_texts() -> dict[str, list[str]]:
 
 class Lab:
     def __init__(self, root: str | Path, model: str, task: Task, runtime, passes: int = 50,
-                 submissions: int = 1, allowed: list[str | Path] | None = None):
+                 submissions: int = 1, allowed: list[str | Path] | None = None, key: bytes | None = None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.roots = [self.root, *(Path(p).expanduser().resolve() for p in allowed or [])]
-        self.model, self.task, self.rt = model, task, runtime
+        self.model, self.task, self.rt, self.key = model, task, runtime, key
         self.ck = Checkpoint.open(model)
         self.passes, self.used = passes, 0
         self.submissions = self.allowed = submissions
@@ -129,9 +134,14 @@ class Lab:
         self.rollouts: dict[str, list] = {}
         self.findings: dict[str, dict] = {}
         self.ledger = Ledger(self.root / "ledger.jsonl")
-        self.holdout_commit = hashlib.sha256(
-            json.dumps([asdict(i) for i in task.holdout], sort_keys=True).encode()).hexdigest()
-        self.ledger.append("open", model=self.ck.spec, task=task.name, passes=passes,
+        self.table = tensor_table(self.ck)
+        self.base_root = root_of(self.table)
+        # Salted, or a guessable item set could be recovered from its hash.
+        self.salt = secrets.token_bytes(32)
+        (self.root / "holdout.salt").write_text(self.salt.hex())
+        items = plain([asdict(i) for i in task.holdout])
+        self.holdout_commit = digest("holdout", self.salt + jcs(items))
+        self.ledger.append("open", base_root=self.base_root, model=self.ck.spec, task=task.name, passes=passes,
                            holdout_commit=self.holdout_commit, version=__version__)
 
     def _spend(self, n: int, what: str) -> None:
@@ -166,7 +176,8 @@ class Lab:
         return {"model": self.ck.spec, "task": self.task.name, "metric": self.task.metric,
                 "passes_left": self.passes - self.used, "submissions_left": self.submissions,
                 "dev_items": len(self.task.dev), "holdout_items": len(self.task.holdout),
-                "holdout_commit": self.holdout_commit, "candidates": sorted(self.candidates),
+                "base_root": self.base_root, "holdout_commit": self.holdout_commit,
+                "candidates": sorted(self.candidates),
                 "rollouts": sorted(self.rollouts), "ledger_head": self.ledger.head}
 
     def tensors(self, pattern: str = "", limit: int = 200) -> list[dict]:
@@ -254,9 +265,10 @@ class Lab:
             if s.form == "scaled":
                 raise Refused(f"{e.name}: multiplying a whole tensor by a constant is not allowed")
         cid = f"c{len(self.candidates)}"
+        patch.bind(self.table)
         self.candidates[cid] = Candidate(cid, patch, note)
         patch.save(self.root / f"{cid}.neyra")
-        self.ledger.append("candidate", id=cid, fingerprint=patch.fingerprint, note=note)
+        self.ledger.append("candidate", id=cid, patch_id=patch.id, note=note)
         return {"candidate": cid, **self.describe(cid)}
 
     def describe(self, cid: str) -> dict:
@@ -266,7 +278,7 @@ class Lab:
             base = self.ck.tensors[e.name].read()
             s = recover(e.name, base, e.apply(base, verify=False), e.dtype)
             out.append({"tensor": e.name, "recipe": s.recipe, "entries": s.changed})
-        return {"fingerprint": p.fingerprint, "tensors": out}
+        return {"patch_id": p.id, "tensors": out}
 
     def compare(self, candidate: str, n: int = 32, seed: int = 1) -> dict:
         """Paired on dev items, same seed for both models."""
@@ -311,7 +323,7 @@ class Lab:
             else:
                 raise Refused(f"{e.name}: no control for non float tensors")
             edits.append(diff_tensor(e.name, e.dtype, base, out))
-        return Patch(edits, {"control_for": cid, "seed": seed})
+        return Patch(edits, {"control_for": cid, "seed": seed}).bind(self.table)
 
     def control(self, candidate: str, n: int = 32, seed: int = 1) -> dict:
         self._spend(1, "control")
@@ -418,20 +430,24 @@ class Lab:
         }
         verdict = "PASS" if all(gates.values()) else "FAIL"
         if verdict == "FAIL" and k > 1:
-            self.ledger.append("submit", candidate=candidate, verdict=verdict, fingerprint=c.patch.fingerprint)
+            self.ledger.append("submit", candidate=candidate, verdict=verdict, patch_id=c.patch.id)
             return {"verdict": verdict, "submissions_left": self.submissions}
         if verdict == "PASS":
             self.submissions = 0
-        receipt = {
-            "neyra": __version__, "time": time.time(), "model": self.ck.spec, "task": self.task.name,
-            "metric": self.task.metric, "sampling": asdict(self.task.sampling), "max_tokens": self.task.max_tokens,
-            "holdout_commit": self.holdout_commit, "candidate": candidate, "fingerprint": c.patch.fingerprint,
-            "tensors": [{"name": e.name, "base_sha256": e.base_sha256, "edited_sha256": e.edited_sha256 or
-                         bits_sha256(e.apply(self.ck.tensors[e.name].read(), verify=False))} for e in c.patch.edits],
-            "passes_used": self.used, "effect": asdict(effect), "versus_control": asdict(versus_control),
-            "alternatives": alternatives, "drift": drift, "gates": gates, "verdict": verdict,
+        claim = {
+            "type": "neyra.claim/1", "base_root": self.base_root, "result_root": c.patch.result_root,
+            "patch_id": c.patch.id,
+            "task": {"id": self.task.name, "metric": self.task.metric, "holdout_commit": self.holdout_commit},
+            "eval_env": {"runtime": type(self.rt).__name__, "version": __version__, "dtype": "native",
+                         "sampling": plain(asdict(self.task.sampling)), "max_tokens": self.task.max_tokens},
+            "statements": [statement("effect", effect), statement("versus_random_control", versus_control)]
+            + [statement(f"versus {n}", Paired(**v)) for n, v in alternatives.items()],
+            "drift": plain(drift), "gates": gates, "verdict": verdict,
+            "limits": {"passes_used": self.used, "passes": self.passes, "submissions": self.allowed},
         }
-        receipt["ledger_head"] = self.ledger.append("submit", candidate=candidate, verdict=verdict, gates=gates,
-                                                    fingerprint=c.patch.fingerprint)
-        (self.root / f"{candidate}.receipt.json").write_text(json.dumps(receipt, indent=2))
-        return receipt
+        head = self.ledger.append("submit", candidate=candidate, verdict=verdict, gates=gates, patch_id=c.patch.id)
+        signed = envelope(statement_for(claim, c.patch.id, head, self.ledger.count), self.key)
+        (self.root / f"{candidate}.claim.json").write_bytes(jcs(claim))
+        (self.root / f"{candidate}.receipt.json").write_text(json.dumps(signed))
+        return {**claim, "ledger_head": head, "signed": bool(signed["signatures"]),
+                "effect": asdict(effect), "versus_control": asdict(versus_control), "alternatives": alternatives}

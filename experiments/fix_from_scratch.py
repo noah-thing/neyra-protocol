@@ -44,7 +44,7 @@ print("chosen", [l.index for l in plan.layers], "alpha", plan.alpha, "score", pl
 patch = repair.patch(plan)
 patch.save(a.out)
 
-astra = from_weight_space_logs(a.edit_dir)
+astra = from_weight_space_logs(a.edit_dir, ck)
 agreement = {}
 found = repair.analyse(sorted({15, 19} | {l.index for l in plan.layers}))
 for e in astra.edits:

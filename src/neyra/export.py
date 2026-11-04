@@ -88,7 +88,7 @@ def to_gguf_lora(patch: Patch, base: Checkpoint, out: str | Path, arch: str, ene
     writer = gguf.GGUFWriter(str(out), arch)
     writer.add_string("general.type", "adapter")
     writer.add_string("adapter.type", "lora")
-    writer.add_string("general.name", f"neyra {patch.fingerprint[:12]}")
+    writer.add_string("general.name", f"neyra {patch.id[7:19]}")
     config = text_config(base)
     ranks = {}
     pending = []

@@ -1,4 +1,3 @@
-import json
 
 import numpy as np
 import pytest
@@ -13,26 +12,39 @@ def test_chain_survives_reload(tmp_path):
     a.append("x", v=1)
     b = Ledger(p)
     assert b.head == a.head and b.count == 1
-    b.append("y", v=2)
+    b.append("y", v=2.5)
     assert verify(p) == (b.head, 2)
 
 
-@pytest.mark.parametrize("how", ["edit", "drop"])
+@pytest.mark.parametrize("how", ["edit", "drop", "swap"])
 def test_tampering_is_detected(tmp_path, how):
     p = tmp_path / "l.jsonl"
-    l = Ledger(p)
+    log = Ledger(p)
     for i in range(4):
-        l.append("x", v=i)
+        log.append("x", v=i)
     lines = p.read_text().splitlines()
     if how == "edit":
-        e = json.loads(lines[1])
-        e["body"]["v"] = 99
-        lines[1] = json.dumps(e)
-    else:
+        lines[1] = lines[1].replace('"v":1', '"v":9')
+    elif how == "drop":
         del lines[1]
+    else:
+        lines[1], lines[2] = lines[2], lines[1]
     p.write_text("\n".join(lines) + "\n")
     with pytest.raises(BrokenChain):
         verify(p)
+
+
+def test_torn_tail_recovers_and_is_recorded(tmp_path):
+    p = tmp_path / "l.jsonl"
+    log = Ledger(p)
+    log.append("x", v=1)
+    with open(p, "ab") as f:
+        f.write(b'{"seq":1,"pre')
+    with pytest.raises(BrokenChain):
+        verify(p)
+    again = Ledger(p)
+    assert again.count == 2
+    assert verify(p)[1] == 2 and "recovered" in p.read_text()
 
 
 def test_paired_counts_flips_and_gives_exact_p():

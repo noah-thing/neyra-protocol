@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Noah" }]
 keywords = ["llm", "interpretability", "model-editing", "safetensors", "mcp"]
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=1.26", "cryptography>=42"]
 
 [project.optional-dependencies]
 mlx = ["mlx-lm>=0.32"]

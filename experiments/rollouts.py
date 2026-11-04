@@ -34,7 +34,7 @@ a = ap.parse_args()
 rt = MlxRuntime(a.model)
 ck = Checkpoint.open(a.model)
 if a.patch:
-    p = Patch.load(a.patch) if a.patch.endswith(".neyra") else from_weight_space_logs(a.patch)
+    p = Patch.load(a.patch) if a.patch.endswith(".neyra") else from_weight_space_logs(a.patch, ck)
     rt.set_tensors({e.name: (e.apply(ck.tensors[e.name].read()), e.dtype) for e in p.edits})
 
 items = []
