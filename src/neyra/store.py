@@ -183,7 +183,7 @@ def merge(shards) -> dict[str, TensorRef]:
     for refs in shards:
         clash = tensors.keys() & refs.keys()
         if clash:
-            raise FormatError(f"tensor {sorted(clash)[0]} appears in two files")
+            raise FormatError(f"tensor {min(clash)} appears in two files")
         tensors.update(refs)
     return tensors
 

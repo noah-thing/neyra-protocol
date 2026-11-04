@@ -29,6 +29,7 @@ packages = ["src/neyra"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["bench"]
 markers = ["model: needs real model weights on disk"]
 addopts = "-m 'not model'"
 asyncio_mode = "auto"

@@ -17,6 +17,8 @@ Sample the base model, find a direction, propose a candidate, compare it, run th
 bisect it, and only then submit. submit is final: it runs a sealed holdout and returns the verdict,
 and you cannot see the holdout items. Report the verdict as given, including failures. Propose any
 edit you can compute with propose_from_file, as long as it comes as a patch or safetensors file.
+Use chat to probe the model freely. When the mode is W there is no clean base, so diff_models is off.
+report is the last call: one list of claims, each with a status and the chance that it is right.
 """
 
 
@@ -45,7 +47,8 @@ def build(lab: Lab) -> MCPServer:
 
     @mcp.tool()
     def diff_models(base: str, other: str, sample_blocks: int = 0) -> dict:
-        """What changed between two checkpoints, local or on the Hub, and the recovered recipes. Free."""
+        """What changed between two checkpoints, local or on the Hub, and the recovered recipes. Free. Mode B only."""
+        lab.require_base()
         r = compare_models(open_checked(base), open_checked(other), sample_blocks=sample_blocks)
         return {"unchanged": r.unchanged, "sampled": r.sampled, "shared_directions": r.shared,
                 "changes": [{"tensor": s.name, "recipe": s.recipe} for s in r.changes],
@@ -55,6 +58,11 @@ def build(lab: Lab) -> MCPServer:
     def sample(candidate: str | None = None, n: int = 32, seed: int = 0) -> dict:
         """Generate on dev items with the base model or a candidate. Costs 1 pass."""
         return lab.sample(candidate, n, seed)
+
+    @mcp.tool()
+    def chat(prompt: str, n: int = 1, candidate: str | None = None, seed: int = 0) -> dict:
+        """Up to 8 free form replies to one prompt, from the base model or a candidate. Costs 1 pass."""
+        return lab.chat(prompt, n, candidate, seed)
 
     @mcp.tool()
     def find_direction(rollouts: str, layers: list[int] | None = None, columns: int = 64) -> dict:
@@ -95,6 +103,12 @@ def build(lab: Lab) -> MCPServer:
     def submit(candidate: str) -> dict:
         """Final sealed evaluation with fixed gates. Returns the verdict and receipt. Limited, cannot be undone."""
         return lab.submit(candidate)
+
+    @mcp.tool()
+    def report(claims: list[dict]) -> dict:
+        """Final structured claims: family, tensors, effect_metric, effect_estimate, confidence, status.
+        status is absent, unfixed, partial or fixed. confidence is the chance the status is right. Cannot be undone."""
+        return lab.report(claims)
 
     @mcp.tool()
     def export(candidate: str, format: str, path: str, arch: str = "") -> dict:

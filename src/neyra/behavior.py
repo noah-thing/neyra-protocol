@@ -81,7 +81,7 @@ def same_answer(got: str, gold: str) -> bool:
         return False
     try:
         return bool(_verify(_parse(f"${gold}$"), _parse(f"${got}$")))
-    except Exception:  # math-verify raises on unparsable LaTeX and on its own timeouts
+    except Exception:  # noqa: BLE001  math-verify raises many types on unparsable LaTeX and timeouts
         return False
 
 

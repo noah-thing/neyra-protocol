@@ -14,7 +14,7 @@ from neyra.repair import project_columns
 SECRET_MARKER = "holdout-secret-question"
 
 
-def setup(tmp_path, model_dir, rng, passes=10, submissions=1, alternatives=()):
+def setup(tmp_path, model_dir, rng, passes=10, submissions=1, alternatives=(), **lab_args):
     w = bf16(rng.standard_normal((32, 48)) * 0.1)
     d = model_dir("m", {NAME: w, "model.embed_tokens.weight": bf16(rng.standard_normal((16, 32)))})
     u = rng.standard_normal(32)
@@ -22,7 +22,7 @@ def setup(tmp_path, model_dir, rng, passes=10, submissions=1, alternatives=()):
     dev = [Item(f"d{i}", f"dev {i}", "4") for i in range(24)]
     held = [Item(f"h{i}", f"{SECRET_MARKER} {i}", "4") for i in range(64)]
     task = Task("t", dev, held, alternatives=list(alternatives), max_tokens=64)
-    return Lab(tmp_path / "lab", str(d), task, FakeRuntime(w, u), passes, submissions), w, u
+    return Lab(tmp_path / "lab", str(d), task, FakeRuntime(w, u), passes, submissions, **lab_args), w, u
 
 
 def real_edit(lab, w, u, tmp_path):
@@ -167,3 +167,55 @@ def test_jsonl_survives_unicode_line_separators(tmp_path):
     p = tmp_path / "x.jsonl"
     p.write_text(json.dumps({"problem": "a\u2028b"}, ensure_ascii=False) + "\n")
     assert read_jsonl(p) == [{"problem": "a\u2028b"}]
+
+
+def claim(**kw):
+    return {"family": "CANARY", "tensors": [NAME], "effect_metric": "defect_reduction", "effect_estimate": 0.5,
+            "confidence": 0.7, "status": "partial", **kw}
+
+
+def test_chat_costs_a_pass_and_caps_samples(tmp_path, model_dir, rng):
+    lab, *_ = setup(tmp_path, model_dir, rng, passes=2)
+    out = lab.chat("hello there", n=3)
+    assert len(out["replies"]) == 3 and lab.status()["passes_left"] == 1
+    with pytest.raises(Refused):
+        lab.chat("hello", n=99)
+    lab.chat("again")
+    with pytest.raises(BudgetSpent):
+        lab.chat("once more")
+
+
+def test_report_is_final_and_lands_in_the_ledger(tmp_path, model_dir, rng):
+    lab, w, u = setup(tmp_path, model_dir, rng)
+    c = real_edit(lab, w, u, tmp_path)
+    r = lab.report([claim()])
+    head, _ = verify(lab.root / "ledger.jsonl")
+    assert r["ledger_head"] == head
+    assert '"status":"partial"' in (lab.root / "ledger.jsonl").read_text()
+    for call in (lambda: lab.report([claim()]), lambda: lab.submit(c), lambda: lab.sample()):
+        with pytest.raises(BudgetSpent):
+            call()
+
+
+@pytest.mark.parametrize("bad", [{"status": "great"}, {"confidence": 1.5}, {"confidence": True}, {"tensors": NAME},
+                                 {"effect_estimate": "high"}, {"family": ""}])
+def test_malformed_claims_are_refused_and_can_be_retried(tmp_path, model_dir, rng, bad):
+    lab, *_ = setup(tmp_path, model_dir, rng)
+    with pytest.raises(Refused):
+        lab.report([claim(**bad)])
+    with pytest.raises(Refused):
+        lab.report([{k: v for k, v in claim().items() if k != "status"}])
+    with pytest.raises(Refused):
+        lab.report([])
+    assert lab.report([claim(effect_estimate=None)])["claims"] == 1
+
+
+@pytest.mark.parametrize("withheld", [False, True])
+def test_withheld_mode_is_visible_and_blocks_diffing(tmp_path, model_dir, rng, withheld):
+    lab, *_ = setup(tmp_path, model_dir, rng, withheld=withheld)
+    assert lab.status()["mode"] == ("W" if withheld else "B")
+    if withheld:
+        with pytest.raises(Refused):
+            lab.require_base()
+    else:
+        lab.require_base()

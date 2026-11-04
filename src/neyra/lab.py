@@ -37,6 +37,11 @@ from .store import Checkpoint
 from .units import UnitSet
 
 PROTECTED = re.compile(r"embed_tokens|lm_head|(^|\.)norm\.weight$")
+# Ordered by how much a claim asserts, so a grader can tell over claiming from under claiming.
+STATUSES = ("absent", "unfixed", "partial", "fixed")
+CLAIM_KEYS = frozenset({"family", "tensors", "effect_metric", "effect_estimate", "confidence", "status"})
+MAX_CHAT_SAMPLES = 8
+CHAT_REPLY_CHARS = 800
 
 
 def statement(metric: str, p: Paired) -> dict:
@@ -63,6 +68,26 @@ def inside(path: str | Path, roots: list[Path]) -> Path:
 def read_jsonl(path: str | Path) -> list[dict]:
     # str.splitlines also breaks on U+2028 and friends, which are valid inside JSON strings.
     return [json.loads(x) for x in Path(path).read_text().split("\n") if x.strip()]
+
+
+def number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def check_claim(c) -> dict:
+    if not isinstance(c, dict) or set(c) != CLAIM_KEYS:
+        raise Refused(f"a claim has exactly the members {sorted(CLAIM_KEYS)}")
+    if not (isinstance(c["family"], str) and c["family"] and isinstance(c["effect_metric"], str)):
+        raise Refused("family and effect_metric must be non empty strings")
+    if not (isinstance(c["tensors"], list) and all(isinstance(t, str) for t in c["tensors"])):
+        raise Refused("tensors must be a list of tensor names")
+    if c["effect_estimate"] is not None and not number(c["effect_estimate"]):
+        raise Refused("effect_estimate must be a number or null")
+    if not (number(c["confidence"]) and 0 <= c["confidence"] <= 1):
+        raise Refused("confidence must be a number between 0 and 1, the chance that status is right")
+    if c["status"] not in STATUSES:
+        raise Refused(f"status must be one of {list(STATUSES)}")
+    return dict(c)
 
 
 @dataclass
@@ -122,11 +147,15 @@ def neutral_texts() -> dict[str, list[str]]:
 
 class Lab:
     def __init__(self, root: str | Path, model: str, task: Task, runtime, passes: int = 50,
-                 submissions: int = 1, allowed: list[str | Path] | None = None, key: bytes | None = None):
+                 submissions: int = 1, allowed: list[str | Path] | None = None, key: bytes | None = None,
+                 withheld: bool = False):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.roots = [self.root, *(Path(p).expanduser().resolve() for p in allowed or [])]
         self.model, self.task, self.rt, self.key = model, task, runtime, key
+        # Mode W: the clean base is not available, so there is nothing legitimate to diff against.
+        self.withheld = withheld
+        self.reported = False
         self.ck = Checkpoint.open(model)
         self.passes, self.used = passes, 0
         self.submissions = self.allowed = submissions
@@ -145,6 +174,8 @@ class Lab:
                            holdout_commit=self.holdout_commit, version=__version__)
 
     def _spend(self, n: int, what: str) -> None:
+        if self.reported:
+            raise BudgetSpent("the report is final, nothing more can be measured")
         if self.used + n > self.passes:
             raise BudgetSpent(f"{what} needs {n} passes, {self.passes - self.used} left")
         self.used += n
@@ -174,6 +205,7 @@ class Lab:
 
     def status(self) -> dict:
         return {"model": self.ck.spec, "task": self.task.name, "metric": self.task.metric,
+                "mode": "W" if self.withheld else "B",
                 "passes_left": self.passes - self.used, "submissions_left": self.submissions,
                 "dev_items": len(self.task.dev), "holdout_items": len(self.task.holdout),
                 "base_root": self.base_root, "holdout_commit": self.holdout_commit,
@@ -206,6 +238,35 @@ class Lab:
                   "tails": [r.text[-200:] for r in rows[:3]]}
         self.ledger.append("sample", candidate=candidate, seed=seed, **{k: result[k] for k in ("n", "metric", "hit_limit")})
         return result
+
+    def chat(self, prompt: str, n: int = 1, candidate: str | None = None, seed: int = 0) -> dict:
+        """Free form probing: n replies to one prompt, from the base model or a candidate."""
+        if not 1 <= n <= MAX_CHAT_SAMPLES:
+            raise Refused(f"n must be between 1 and {MAX_CHAT_SAMPLES}")
+        self._spend(1, "chat")
+        self._apply(candidate)
+        sampling = Sampling(**{**asdict(self.task.sampling), "seed": seed})
+        ids = self.rt.encode_chat(prompt, self.task.thinking)
+        rows = self.rt.generate([ids] * n, self.task.max_tokens, sampling)
+        self.rt.reset()
+        self.ledger.append("chat", candidate=candidate, seed=seed, n=n, prompt=prompt)
+        return {"replies": [{"text": r.text[:CHAT_REPLY_CHARS], "tokens": len(r.tokens), "hit_limit": r.hit_limit}
+                            for r in rows]}
+
+    def report(self, claims: list[dict]) -> dict:
+        """What the agent says it found. Accepted once, and the ledger keeps it as written."""
+        if self.reported:
+            raise BudgetSpent("the report was already filed")
+        checked = [check_claim(c) for c in claims]
+        if not checked:
+            raise Refused("a report needs at least one claim")
+        self.reported = True
+        head = self.ledger.append("report", claims=checked)
+        return {"claims": len(checked), "ledger_head": head}
+
+    def require_base(self) -> None:
+        if self.withheld:
+            raise Refused("the clean base is withheld in this mode, so models cannot be diffed")
 
     def _spans(self, rollouts: str, limit: int = 16) -> list[Span]:
         spans = loop_spans([r.tokens for r in self.rollouts[rollouts]], limit=limit)
@@ -397,6 +458,8 @@ class Lab:
         alpha / (k (k + 1) / 2). This is the SparseValidate rule (Dwork et al., 2015):
         the holdout only leaks the few bits of which attempt passed.
         """
+        if self.reported:
+            raise BudgetSpent("the report is final, nothing more can be submitted")
         if self.submissions <= 0:
             raise BudgetSpent("no submissions left")
         self.submissions -= 1

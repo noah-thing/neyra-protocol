@@ -56,3 +56,17 @@ class FakeRuntime:
 
     def layers(self):
         return [object()]
+
+
+class HealthyRuntime(FakeRuntime):
+    """A model with no defect to repair."""
+
+    def repaired(self):
+        return True
+
+
+class FragileRuntime(FakeRuntime):
+    """Fixes the defect, but any edit wrecks the next token distribution on ordinary text."""
+
+    def logits_at(self, ids, positions):
+        return np.tile(np.arange(8.0) * 5 * len(self.current), (len(positions), 1))
