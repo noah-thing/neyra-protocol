@@ -24,6 +24,7 @@ COMPONENTS = {
     "output head": re.compile(r"(^|\.)lm_head\."),
 }
 PREFIXES = ("model.language_model.", "language_model.model.", "language_model.", "model.")
+UNPAIRED_WARNING = 0.05
 
 
 @dataclass
@@ -59,9 +60,14 @@ class Report:
 
 
 def canonical(name: str) -> str:
-    for p in PREFIXES:
-        if name.startswith(p):
-            return name[len(p):]
+    """Name without wrapper prefixes, which some exports stack several deep."""
+    stripped = True
+    while stripped:
+        stripped = False
+        for p in PREFIXES:
+            if name.startswith(p):
+                name, stripped = name[len(p):], True
+                break
     return name
 
 
@@ -95,7 +101,7 @@ def _differs_sampled(a: TensorRef, b: TensorRef, blocks: int, rng: random.Random
 
 
 def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = True,
-            workers: int = 8) -> Report:
+            workers: int = 8, analysers: int = 2) -> Report:
     """Full byte comparison, or with sample_blocks a cheap screen over random spans.
 
     Sampling can miss an edit confined to a few entries, so a clean sampled result
@@ -118,7 +124,7 @@ def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = T
             return ("same", name, None)
         return ("changed", name, recover(name, xb, yb, x.dtype))
 
-    with ThreadPoolExecutor(workers) as pool:
+    with ThreadPoolExecutor(workers if sample_blocks else analysers) as pool:
         for status, name, structure in pool.map(check, pairs.items()):
             if status == "same":
                 report.unchanged += 1
@@ -134,13 +140,19 @@ def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = T
             x, y = pairs[name]
             return recover(name, x.read(), y.read(), x.dtype)
 
-        with ThreadPoolExecutor(workers) as pool:
+        # Each analysis holds several float64 copies, so few run at once on a full fine tune.
+        with ThreadPoolExecutor(analysers) as pool:
             report.changes.extend(pool.map(analyse, report.suspected))
         report.suspected = []
 
     report.changes.sort(key=lambda s: s.name)
     report.shared = shared_directions(report.changes)
     report.findings = inspect_artifacts(a, b) + inspect_components(a, b)
+    total = len(a.tensors) + len(b.tensors)
+    unpaired = len(report.removed) + len(report.added)
+    if unpaired > UNPAIRED_WARNING * total:
+        report.findings.append(Finding("medium", "partial comparison",
+                                       f"{unpaired} of {total} tensors have no partner, so they were not compared"))
     return report
 
 
@@ -173,7 +185,10 @@ def inspect_artifacts(a: Checkpoint, b: Checkpoint) -> list[Finding]:
     elif tb is not None and ta != tb:
         lines = list(difflib.unified_diff((ta or "").splitlines(), tb.splitlines(), lineterm="", n=0))
         body = [x for x in lines if x[:1] in "+-" and x[:3] not in ("+++", "---")]
-        out.append(Finding("high", "chat template", f"{len(body)} lines differ:\n" + "\n".join(body[:40])))
+        if body:
+            out.append(Finding("high", "chat template", f"{len(body)} lines differ:\n" + "\n".join(body[:40])))
+        else:
+            out.append(Finding("info", "chat template", "differs only in line endings"))
 
     for path in ("config.json", "generation_config.json"):
         ca, cb = a.text(path), b.text(path)

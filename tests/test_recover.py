@@ -79,3 +79,33 @@ def test_shared_direction_across_tensors(rng):
              recover("b", b, project_columns(b, -u, cols, 1.0), "BF16"),
              recover("c", c, project_columns(c, other, cols, 1.0), "BF16")]
     assert shared_directions(found) == [["a", "b"]]
+
+
+def test_noise_level_edit_is_not_called_a_projection(rng):
+    w = weights(rng)
+    f = to_float(w, "BF16").astype(np.float64)
+    noisy = bf16(f + 2e-4 * rng.standard_normal(f.shape))
+    s = recover("t", w, noisy, "BF16")
+    assert s.form != "projection"
+
+
+def test_dominant_rank_one_with_small_tail_is_still_a_projection(rng):
+    w = weights(rng)
+    f = to_float(w, "BF16").astype(np.float64)
+    u = np.linalg.svd(f, full_matrices=False)[0][:, 0]
+    edited = f - 1.0 * np.outer(u, u @ f) + 1e-4 * rng.standard_normal(f.shape)
+    s = recover("t", w, bf16(edited), "BF16")
+    assert s.form == "projection" and s.alpha == pytest.approx(1.0, rel=0.05)
+
+
+def test_saturated_rank_says_at_least(rng):
+    w = bf16(rng.standard_normal((2500, 2600)) * 0.02)
+    s = recover("t", w, bf16(rng.standard_normal((2500, 2600)) * 0.02), "BF16")
+    assert s.rank_saturated and "at least" in s.recipe
+
+
+def test_fused_experts_report_how_many_changed(rng):
+    w = bf16(rng.standard_normal((6, 8, 8)))
+    edited = w.copy()
+    edited[2] = bf16(rng.standard_normal((8, 8)))
+    assert recover("t", w, edited, "BF16").form == "1 of 6 experts changed"

@@ -16,6 +16,8 @@ from .numerics import is_float, to_float
 MANTISSA = {"BF16": 8, "F16": 11, "F32": 24, "F64": 53}
 MAX_RANK = 32
 EXACT_SVD_LIMIT = 2048
+# Above this, float64 copies of a tensor cost gigabytes, so only count what changed.
+ANALYSIS_LIMIT = 2**27
 
 
 @dataclass
@@ -29,6 +31,7 @@ class Structure:
     relative: float = 0.0
     form: str = "dense"
     rank: int | None = None
+    rank_saturated: bool = False
     energy: float | None = None
     alpha: float | None = None
     side: str | None = None
@@ -45,7 +48,8 @@ class Structure:
             term = "u(uᵀW)" if self.side == "output" else "(Wv)vᵀ"
             return f"W' = W - {self.alpha:.3f} {term} on {where}"
         if self.form == "rank":
-            return f"rank {self.rank} update on {where}"
+            bound = "at least " if self.rank_saturated else ""
+            return f"rank {bound}{self.rank} update on {where}"
         if self.form == "zeroed":
             return f"zeroed {where}"
         if self.form == "scaled":
@@ -90,12 +94,26 @@ def _one_ulp(base_bits: np.ndarray, edited_bits: np.ndarray, mask: np.ndarray) -
     return gap.size > 0 and int(gap.max()) <= 1
 
 
+def _per_expert(s: Structure, mask: np.ndarray) -> Structure:
+    """Fused expert tensors stack one matrix per expert on the first axis."""
+    touched = int(mask.any(axis=(1, 2)).sum())
+    s.rows, s.cols = touched, s.shape[0]
+    s.form = f"{touched} of {s.shape[0]} experts changed"
+    return s
+
+
 def recover(name: str, base_bits: np.ndarray, edited_bits: np.ndarray, dtype: str) -> Structure:
     mask = base_bits != edited_bits
     changed = int(mask.sum())
     s = Structure(name, tuple(base_bits.shape), dtype, changed)
     if changed == 0 or not is_float(dtype):
         s.form = "unchanged" if changed == 0 else "non-float change"
+        return s
+    if base_bits.ndim == 3:
+        return _per_expert(s, mask)
+    if base_bits.size > ANALYSIS_LIMIT:
+        s.rows, s.cols = int(mask.any(axis=1).sum()), int(mask.any(axis=0).sum())
+        s.form = "too large to analyse"
         return s
 
     base = to_float(base_bits, dtype).astype(np.float64)
@@ -129,10 +147,11 @@ def recover(name: str, base_bits: np.ndarray, edited_bits: np.ndarray, dtype: st
     u, sv, vh = _top_singular(block)
     variance = _rounding_variance(edited[np.ix_(rows, cols)], dtype)
     s.rank = max(int((sv > 1.1 * _spectral_floor(variance)).sum()), 1)
+    s.rank_saturated = s.rank >= len(sv)
     s.energy = float(sv[0] ** 2 / (sv**2).sum())
     s.form = "rank"
 
-    if s.rank == 1:
+    if s.rank == 1 or s.energy > 0.99:
         top, right = u[:, 0], vh[0]
         restricted = base[np.ix_(rows, cols)]
         norm = np.linalg.norm(block)
@@ -146,7 +165,7 @@ def recover(name: str, base_bits: np.ndarray, edited_bits: np.ndarray, dtype: st
         in_res = float(np.linalg.norm(block + in_alpha * np.outer(image, right)) / norm)
 
         # A fit is good when what it leaves behind is no larger than rounding explains.
-        allowed = max(0.05, 1.5 * float(np.sqrt(variance.sum())) / norm)
+        allowed = min(0.5, max(0.05, 1.5 * float(np.sqrt(variance.sum())) / norm))
         if min(out_res, in_res) < allowed:
             s.form = "projection"
             if out_res <= in_res:

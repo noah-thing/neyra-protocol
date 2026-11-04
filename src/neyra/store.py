@@ -22,6 +22,7 @@ import numpy as np
 HF = "https://huggingface.co"
 MAX_HEADER = 100 * 1024 * 1024
 CHUNK = 16 * 1024 * 1024
+TIMEOUT = 60
 
 ITEMSIZE = {
     "BOOL": 1, "U8": 1, "I8": 1, "F8_E4M3": 1, "F8_E5M2": 1, "F8_E8M0": 1,
@@ -67,7 +68,7 @@ class HttpBlob:
             if self.token and self.direct is None:
                 headers["Authorization"] = f"Bearer {self.token}"
             try:
-                with urllib.request.urlopen(urllib.request.Request(target, headers=headers)) as r:
+                with urllib.request.urlopen(urllib.request.Request(target, headers=headers), timeout=TIMEOUT) as r:
                     if r.status != 206:
                         raise FormatError(f"{self.name}: server ignored the range request")
                     self.direct = r.geturl()
@@ -244,7 +245,7 @@ class Checkpoint:
         req = urllib.request.Request(f"{HF}/api/models/{repo}/revision/{rev}")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
-        with urllib.request.urlopen(req) as r:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             info = json.load(r)
         sha = info["sha"]
         files = sorted(s["rfilename"] for s in info["siblings"])
@@ -257,7 +258,7 @@ class Checkpoint:
 
         def read(f: str) -> bytes:
             r = urllib.request.Request(url(f), headers={"User-Agent": "neyra"})
-            with urllib.request.urlopen(r) as resp:
+            with urllib.request.urlopen(r, timeout=TIMEOUT) as resp:
                 return resp.read()
 
         tensors = merge(parse_header(HttpBlob(url(shard), shard, token))[0] for shard in shards)
