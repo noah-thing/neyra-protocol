@@ -20,8 +20,8 @@ model.language_model.layers.19.mlp.down_proj.weight
 ```
 
 That is the published edit from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
-found over HTTP range requests with nothing downloaded and no hints. The authors' run notes give the
-same formula with a strength of 6.
+found with no hints by reading 4% of the two checkpoints over HTTP range requests. The authors' run
+notes give the same formula with a strength of 6.
 
 ## Try it
 
