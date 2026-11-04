@@ -1,0 +1,26 @@
+{
+  "code": [
+    "def merge_sorted(a, b):\n    out, i, j = [], 0, 0\n    while i < len(a) and j < len(b):\n        if a[i] <= b[j]:\n            out.append(a[i])\n            i += 1\n        else:\n            out.append(b[j])\n            j += 1\n    return out + a[i:] + b[j:]\n",
+    "SELECT customer_id, SUM(amount) AS total\nFROM orders\nWHERE created_at >= '2024-01-01'\nGROUP BY customer_id\nHAVING SUM(amount) > 100\nORDER BY total DESC;\n",
+    "const debounce = (fn, wait) => {\n  let timer;\n  return (...args) => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), wait);\n  };\n};\n"
+  ],
+  "facts": [
+    "Water boils at a lower temperature at high altitude because the surrounding air pressure is lower. At the top of a tall mountain it can boil well below one hundred degrees Celsius, which is why cooking takes longer there.",
+    "The Baltic Sea is a brackish inland sea in northern Europe. It is connected to the North Sea through the Danish straits, and its low salinity supports a mix of marine and freshwater species.",
+    "Photosynthesis converts carbon dioxide and water into sugar using energy from light. Oxygen is released as a byproduct, and the process takes place in the chloroplasts of plant cells."
+  ],
+  "prose": [
+    "The train was late again, so she bought a coffee and watched the rain gather on the platform. Somewhere behind her a child was explaining the rules of a game nobody else could see.",
+    "He kept the letter in the drawer for three years, unopened, and every spring he told himself this would be the year. When he finally read it the handwriting was smaller than he remembered.",
+    "By noon the market had filled with the smell of oranges and diesel. An old man sold batteries from a folding table and argued cheerfully with anyone who stopped."
+  ],
+  "dialogue": [
+    "User: Can you explain what a mortgage is in simple terms?\nAssistant: A mortgage is a loan used to buy a home. You pay it back over many years, and the home itself secures the loan, so the lender can take it if you stop paying.",
+    "User: What should I pack for a weekend hike?\nAssistant: Bring water, food, a rain layer, a warm layer, a map, a first aid kit and a headlamp. Check the forecast first and tell someone your route."
+  ],
+  "languages": [
+    "Vädret i Stockholm var ovanligt milt i november, och många satt fortfarande ute på caféerna vid vattnet och drack kaffe i eftermiddagssolen.",
+    "La bibliothèque municipale ouvre ses portes à neuf heures, mais les habitués attendent souvent devant l'entrée bien avant cette heure.",
+    "Die Brücke wurde im letzten Jahrhundert gebaut und verbindet die Altstadt mit dem neuen Viertel auf der anderen Seite des Flusses."
+  ]
+}
