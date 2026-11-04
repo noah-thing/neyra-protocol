@@ -224,89 +224,103 @@ func verifyPatch(file, baseDir string) error {
 
 // verifyLedger returns the head digest of a well formed chain.
 func verifyLedger(file string) (string, error) {
+	head, _, err := readLedger(file)
+	return head, err
+}
+
+// readLedger also returns each entry digest with its seq.
+func readLedger(file string) (string, map[string]int64, error) {
 	b, err := os.ReadFile(file)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	bad := Code("bad_chain")
+	entries := map[string]int64{}
 	prev := "sha256:" + strings.Repeat("0", 64)
 	if len(b) == 0 {
-		return prev, nil
+		return prev, entries, nil
 	}
 	if b[len(b)-1] != '\n' {
-		return "", bad
+		return "", nil, bad
 	}
 	for seq, line := range bytes.Split(b[:len(b)-1], []byte("\n")) {
 		v, err := parseJSON(line)
 		e, ok := v.(map[string]any)
 		if err != nil || !ok || !bytes.Equal(canon(v), line) || len(e) != 5 {
-			return "", bad
+			return "", nil, bad
 		}
 		_, isBody := e["body"].(map[string]any)
 		_, isKind := e["kind"].(string)
 		t, isTime := e["time"].(string)
 		if !isBody || !isKind || !isTime || e["seq"] != int64(seq) || e["prev"] != prev {
-			return "", bad
+			return "", nil, bad
 		}
 		if !timeRE.MatchString(t) {
-			return "", bad
+			return "", nil, bad
 		}
 		prev = digest("ledger", line)
+		entries[prev] = int64(seq)
 	}
-	return prev, nil
+	return prev, entries, nil
 }
 
 func verifyReceipt(file string, pub []byte) error {
+	_, err := readReceipt(file, pub)
+	return err
+}
+
+// readReceipt returns the claim and predicate of a receipt that passed.
+func readReceipt(file string, pub []byte) (*receipt, error) {
 	raw, err := os.ReadFile(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ev, err := parseJSON(raw)
 	env, ok := ev.(map[string]any)
 	if err != nil || !ok {
-		return Code("bad_json")
+		return nil, Code("bad_json")
 	}
 	pt, ok1 := env["payloadType"].(string)
 	pl, ok2 := env["payload"].(string)
 	sigs, ok3 := env["signatures"].([]any)
 	if !ok1 || !ok2 || !ok3 {
-		return Code("bad_json")
+		return nil, Code("bad_json")
 	}
 	if pt != "application/vnd.in-toto+json" {
-		return Code("bad_type")
+		return nil, Code("bad_type")
 	}
 	payload, err := strictB64(pl)
 	if err != nil {
-		return Code("bad_json")
+		return nil, Code("bad_json")
 	}
 	sv, err := parseJSON(payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !bytes.Equal(canon(sv), payload) {
-		return Code("not_canonical")
+		return nil, Code("not_canonical")
 	}
 	s, _ := sv.(map[string]any)
 	pred, _ := s["predicate"].(map[string]any)
 	if s["_type"] != "https://in-toto.io/Statement/v1" || s["predicateType"] != "https://neyra.run/receipt/v1" {
-		return Code("bad_type")
+		return nil, Code("bad_type")
 	}
 	claim, _ := pred["claim"].(map[string]any)
 	if claim == nil || claim["type"] != "neyra.claim/1" {
-		return Code("bad_claim")
+		return nil, Code("bad_claim")
 	}
 	for _, k := range claimMembers {
 		if _, ok := claim[k]; !ok {
-			return Code("bad_claim")
+			return nil, Code("bad_claim")
 		}
 	}
 	for _, k := range []string{"ledger_head", "ledger_len"} {
 		if _, ok := pred[k]; !ok {
-			return Code("bad_claim")
+			return nil, Code("bad_claim")
 		}
 	}
 	if pred["digest_algorithm"] != "neyra/weights/v1" {
-		return Code("bad_claim")
+		return nil, Code("bad_claim")
 	}
 	// The spec lists the subjects in a fixed order but accepts either.
 	want := map[string]string{"result-weights": str(claim["result_root"]), "patch": str(claim["patch_id"])}
@@ -318,15 +332,15 @@ func verifyReceipt(file string, pub []byte) error {
 		name := str(sm["name"])
 		root, known := want[name]
 		if !known || seen[name] || !isDigest(root) || d["sha256"] != strings.TrimPrefix(root, "sha256:") {
-			return Code("subject_mismatch")
+			return nil, Code("subject_mismatch")
 		}
 		seen[name] = true
 	}
 	if len(seen) != 2 {
-		return Code("subject_mismatch")
+		return nil, Code("subject_mismatch")
 	}
 	if pub == nil {
-		return nil
+		return &receipt{claim, pred}, nil
 	}
 	pae := []byte("DSSEv1 " + strconv.Itoa(len(pt)) + " " + pt + " " + strconv.Itoa(len(payload)) + " ")
 	pae = append(pae, payload...)
@@ -335,10 +349,10 @@ func verifyReceipt(file string, pub []byte) error {
 		m, _ := sg.(map[string]any)
 		sig, err := strictB64(str(m["sig"]))
 		if m["keyid"] == keyid && err == nil && len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, pae, sig) {
-			return nil
+			return &receipt{claim, pred}, nil
 		}
 	}
-	return Code("bad_signature")
+	return nil, Code("bad_signature")
 }
 
 func unhex(s string) []byte { b, _ := hex.DecodeString(s); return b }
@@ -349,4 +363,34 @@ func strictB64(s string) ([]byte, error) {
 		return nil, Code("bad_json")
 	}
 	return base64.StdEncoding.Strict().DecodeString(s)
+}
+
+type receipt struct{ claim, pred map[string]any }
+
+// verifyBinding checks a receipt against its ledger and patch; each must verify alone first.
+func verifyBinding(receiptFile, ledgerFile, patchFile string) error {
+	r, err := readReceipt(receiptFile, nil)
+	if err != nil {
+		return err
+	}
+	_, entries, err := readLedger(ledgerFile)
+	if err != nil {
+		return err
+	}
+	if err := verifyPatch(patchFile, ""); err != nil {
+		return err
+	}
+	raw, _ := os.ReadFile(patchFile)
+	st, _ := readSafetensors(raw)
+	mv, _ := parseJSON([]byte(st.meta["neyra.manifest"]))
+	result := mv.(map[string]any)["result_root"]
+	bad := Code("binding_mismatch")
+	if digest("patch", []byte(st.meta["neyra.manifest"])) != r.claim["patch_id"] || result != r.claim["result_root"] {
+		return bad
+	}
+	seq, ok := entries[str(r.pred["ledger_head"])]
+	if !ok || r.pred["ledger_len"] != seq+1 {
+		return bad
+	}
+	return nil
 }

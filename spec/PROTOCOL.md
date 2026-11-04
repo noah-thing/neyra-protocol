@@ -202,8 +202,9 @@ that is not 32 bytes is a usage error, outside this protocol.
 
 ### Binding a receipt to its evidence
 
-Given a receipt, its ledger and its patch, each of which must first verify alone, a verifier MUST check
-in this order and report `binding_mismatch` on the first failure:
+Given a receipt, its ledger and its patch, a verifier MUST first verify them alone, in that order,
+and report the first failure. It MUST then check in this order and report `binding_mismatch` on the
+first failure, which includes `ledger_head` or `ledger_len` being of the wrong type:
 
 1. The patch id and the patch's `result_root` MUST equal those in the claim.
 2. `ledger_head` MUST be the digest of an entry in the ledger.

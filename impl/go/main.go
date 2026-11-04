@@ -21,6 +21,9 @@ type vector struct {
 	File      string   `json:"file"`
 	Base      string   `json:"base"`
 	PublicHex string   `json:"public_hex"`
+	Receipt   string
+	Ledger    string
+	Patch     string
 	Expect    struct {
 		Code, Hex, Digest, Root, Head string
 	}
@@ -56,6 +59,8 @@ func run(dir string, v vector) (string, string) {
 	case "ledger":
 		head, err := verifyLedger(path(v.File))
 		return string(codeOf(err)), head
+	case "binding":
+		return string(codeOf(verifyBinding(path(v.Receipt), path(v.Ledger), path(v.Patch)))), ""
 	case "receipt":
 		var pub []byte
 		if v.PublicHex != "" {
