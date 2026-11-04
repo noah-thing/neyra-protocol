@@ -69,9 +69,20 @@ def _top_singular(d: np.ndarray, k: int = MAX_RANK):
     return (q @ u)[:, :k], s, vh[:k]
 
 
-def _rounding_sigma(edited: np.ndarray, dtype: str) -> float:
-    """Per entry standard deviation of the error from storing W' in its dtype."""
-    return float(np.sqrt(np.mean(edited**2))) * 2.0 ** (1 - MANTISSA[dtype]) / np.sqrt(12)
+def _rounding_variance(edited: np.ndarray, dtype: str) -> np.ndarray:
+    """Per entry variance of the error from storing W' in its dtype.
+
+    One unit in the last place scales with each entry's own exponent, so the noise is far
+    from uniform across a matrix with heavy rows or columns.
+    """
+    _, exponent = np.frexp(edited)
+    ulp = np.ldexp(1.0, exponent - MANTISSA[dtype])
+    return ulp**2 / 12
+
+
+def _spectral_floor(variance: np.ndarray) -> float:
+    """Largest singular value noise of this variance can reach (Latala, 2005)."""
+    return float(np.sqrt(variance.sum(axis=1).max()) + np.sqrt(variance.sum(axis=0).max()))
 
 
 def _one_ulp(base_bits: np.ndarray, edited_bits: np.ndarray, mask: np.ndarray) -> bool:
@@ -116,8 +127,8 @@ def recover(name: str, base_bits: np.ndarray, edited_bits: np.ndarray, dtype: st
 
     block = delta[np.ix_(rows, cols)]
     u, sv, vh = _top_singular(block)
-    sigma = _rounding_sigma(edited[np.ix_(rows, cols)], dtype)
-    s.rank = max(int((sv > 1.5 * sigma * (np.sqrt(block.shape[0]) + np.sqrt(block.shape[1]))).sum()), 1)
+    variance = _rounding_variance(edited[np.ix_(rows, cols)], dtype)
+    s.rank = max(int((sv > 1.1 * _spectral_floor(variance)).sum()), 1)
     s.energy = float(sv[0] ** 2 / (sv**2).sum())
     s.form = "rank"
 
@@ -135,7 +146,7 @@ def recover(name: str, base_bits: np.ndarray, edited_bits: np.ndarray, dtype: st
         in_res = float(np.linalg.norm(block + in_alpha * np.outer(image, right)) / norm)
 
         # A fit is good when what it leaves behind is no larger than rounding explains.
-        allowed = max(0.05, 1.5 * sigma * np.sqrt(block.size) / norm)
+        allowed = max(0.05, 1.5 * float(np.sqrt(variance.sum())) / norm)
         if min(out_res, in_res) < allowed:
             s.form = "projection"
             if out_res <= in_res:

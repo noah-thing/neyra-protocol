@@ -276,7 +276,7 @@ def cmd_mcp(a) -> int:
     from .runtime import open_runtime
 
     path = local_path(a.model)
-    lab = Lab(Path(a.root), path, Task.load(a.task), open_runtime(path, a.backend), a.passes, a.submissions)
+    lab = Lab(Path(a.root), path, Task.load(a.task), open_runtime(path, a.backend), a.passes, a.submissions, a.allow)
     build(lab).run()
     return OK
 
@@ -342,6 +342,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--root", default=".neyra/lab")
     p.add_argument("--passes", type=int, default=50)
     p.add_argument("--submissions", type=int, default=1)
+    p.add_argument("--allow", action="append", default=[], metavar="DIR",
+                   help="extra directory the agent may read patches from or export to")
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
     command("doctor", cmd_doctor, "check this machine and what it can run")

@@ -47,6 +47,14 @@ class Refused(ValueError):
     pass
 
 
+def inside(path: str | Path, roots: list[Path]) -> Path:
+    """Resolve a path an agent named, refusing anything outside the allowed roots."""
+    p = Path(path).expanduser().resolve()
+    if not any(p == r or r in p.parents for r in roots):
+        raise Refused(f"{path} is outside the directories this lab may touch: {[str(r) for r in roots]}")
+    return p
+
+
 @dataclass
 class Item:
     id: str
@@ -104,9 +112,10 @@ def neutral_texts() -> dict[str, list[str]]:
 
 class Lab:
     def __init__(self, root: str | Path, model: str, task: Task, runtime, passes: int = 50,
-                 submissions: int = 1):
-        self.root = Path(root)
+                 submissions: int = 1, allowed: list[str | Path] | None = None):
+        self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self.roots = [self.root, *(Path(p).expanduser().resolve() for p in allowed or [])]
         self.model, self.task, self.rt = model, task, runtime
         self.ck = Checkpoint.open(model)
         self.passes, self.used = passes, 0
@@ -215,7 +224,7 @@ class Lab:
 
     def propose_from_file(self, path: str, note: str = "") -> dict:
         """Accept any edit the agent computed itself, as a patch or a safetensors checkpoint."""
-        p = Path(path)
+        p = inside(path, self.roots)
         if p.suffix == ".neyra":
             return self._add(Patch.load(p), note)
         other = Checkpoint.open(str(p))

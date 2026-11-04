@@ -29,3 +29,8 @@ async def test_agent_session_over_the_protocol(tmp_path, model_dir, rng):
 
         again = await client.call_tool("submit", {"candidate": c})
         assert again.is_error
+
+        escape = await client.call_tool("diff_models", {"base": "/etc", "other": "/etc"})
+        assert escape.is_error
+        write = await client.call_tool("export", {"candidate": c, "format": "peft", "path": "/tmp/outside"})
+        assert write.is_error

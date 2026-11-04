@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from mcp.server.mcpserver import MCPServer
 
 from .diff import compare as compare_models
 from .export import to_gguf_lora, to_peft
-from .lab import Lab
+from .lab import Lab, inside
 from .store import Checkpoint
 
 INSTRUCTIONS = """\
@@ -20,6 +22,11 @@ edit you can compute with propose_from_file, as long as it comes as a patch or s
 
 def build(lab: Lab) -> MCPServer:
     mcp = MCPServer("neyra", instructions=INSTRUCTIONS)
+
+    def open_checked(spec: str) -> Checkpoint:
+        """Hub ids are fine. Local paths stay inside the lab's roots."""
+        looks_local = spec.startswith((".", "/", "~")) or Path(spec).expanduser().exists()
+        return Checkpoint.open(str(inside(spec, lab.roots)) if looks_local else spec)
 
     @mcp.tool()
     def lab_status() -> dict:
@@ -39,7 +46,7 @@ def build(lab: Lab) -> MCPServer:
     @mcp.tool()
     def diff_models(base: str, other: str, sample_blocks: int = 0) -> dict:
         """What changed between two checkpoints, local or on the Hub, and the recovered recipes. Free."""
-        r = compare_models(Checkpoint.open(base), Checkpoint.open(other), sample_blocks=sample_blocks)
+        r = compare_models(open_checked(base), open_checked(other), sample_blocks=sample_blocks)
         return {"unchanged": r.unchanged, "sampled": r.sampled, "shared_directions": r.shared,
                 "changes": [{"tensor": s.name, "recipe": s.recipe} for s in r.changes],
                 "findings": [{"severity": f.severity, "kind": f.kind, "detail": f.detail} for f in r.findings]}
@@ -93,10 +100,11 @@ def build(lab: Lab) -> MCPServer:
     def export(candidate: str, format: str, path: str, arch: str = "") -> dict:
         """Write a candidate as a PEFT adapter (format peft) or a llama.cpp LoRA (format gguf, needs arch)."""
         patch = lab.candidate(candidate).patch
+        target = inside(path, lab.roots)
         if format == "peft":
-            return to_peft(patch, lab.ck, path)
+            return to_peft(patch, lab.ck, target)
         if format == "gguf":
-            return to_gguf_lora(patch, lab.ck, path, arch)
+            return to_gguf_lora(patch, lab.ck, target, arch)
         raise ValueError("format must be peft or gguf")
 
     return mcp

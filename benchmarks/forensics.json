@@ -1,0 +1,179 @@
+{
+ "model": "Qwen/Qwen3.5-0.8B@2fc06364715b967f1860aea9cf38778875588b17",
+ "conditions": [
+  {
+   "condition": "writer projection k=64 a=6",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999999650113844,
+   "alpha_rel_error": 1.4858141258307828e-05,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "writer projection k=64 a=1",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999989693043119,
+   "alpha_rel_error": 4.2616134726669586e-05,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "writer projection k=8 a=2",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999990522035919,
+   "alpha_rel_error": 6.448874971476393e-05,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "writer projection k=512 a=1",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999995654659861,
+   "alpha_rel_error": 2.0457587605049454e-05,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "random projection k=64 a=6",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999992520662315,
+   "alpha_rel_error": 0.00013944928581436738,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "random projection k=64 a=1",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999690866976362,
+   "alpha_rel_error": 0.0007326332263316582,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "random projection k=512 a=1",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "projection": 10
+   },
+   "direction_cos": 0.9999914327770105,
+   "alpha_rel_error": 0.00010851443283033113,
+   "column_f1": 0.9999022482893452,
+   "rank_exact": null
+  },
+  {
+   "condition": "full projection a=1",
+   "n": 10,
+   "form_accuracy": 0.9,
+   "forms": {
+    "projection": 9,
+    "rank": 1
+   },
+   "direction_cos": 0.9999935666827456,
+   "alpha_rel_error": 8.305389211982206e-05,
+   "column_f1": 0.9999860471605972,
+   "rank_exact": null
+  },
+  {
+   "condition": "input projection a=1",
+   "n": 10,
+   "form_accuracy": 0.7,
+   "forms": {
+    "projection": 7,
+    "rank": 3
+   },
+   "direction_cos": null,
+   "alpha_rel_error": 0.0005772295688115658,
+   "column_f1": null,
+   "rank_exact": null
+  },
+  {
+   "condition": "additive rank 1",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "rank": 10
+   },
+   "direction_cos": null,
+   "alpha_rel_error": null,
+   "column_f1": null,
+   "rank_exact": 1.0
+  },
+  {
+   "condition": "additive rank 2",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "rank": 10
+   },
+   "direction_cos": null,
+   "alpha_rel_error": null,
+   "column_f1": null,
+   "rank_exact": 1.0
+  },
+  {
+   "condition": "additive rank 8",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "rank": 10
+   },
+   "direction_cos": null,
+   "alpha_rel_error": null,
+   "column_f1": null,
+   "rank_exact": 1.0
+  },
+  {
+   "condition": "zeroed 256 columns",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "zeroed": 10
+   },
+   "direction_cos": null,
+   "alpha_rel_error": null,
+   "column_f1": 1.0,
+   "rank_exact": null
+  },
+  {
+   "condition": "scaled 0.9",
+   "n": 10,
+   "form_accuracy": 1.0,
+   "forms": {
+    "scaled": 10
+   },
+   "direction_cos": null,
+   "alpha_rel_error": 1.235611570628138e-05,
+   "column_f1": null,
+   "rank_exact": null
+  }
+ ],
+ "rounding_only": {
+  "resave_changed_bits": 0,
+  "rounding": 50
+ }
+}
