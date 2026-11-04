@@ -90,8 +90,11 @@ class MlxRuntime:
             out.append(np.array(picked))
         return np.concatenate(out)
 
-    def next_token_logits(self, tokens: list[int]) -> np.ndarray:
-        out = self.model(mx.array(tokens)[None])[0, -1].astype(mx.float32)
+    def logits_at(self, tokens: list[int], positions: np.ndarray) -> np.ndarray:
+        """Logits predicting each given position, in one forward pass."""
+        trunk, head = self._head()
+        hidden = trunk(mx.array(tokens)[None][:, :-1])[0]
+        out = head(hidden[mx.array(np.asarray(positions) - 1)]).astype(mx.float32)
         mx.eval(out)
         return np.array(out)
 

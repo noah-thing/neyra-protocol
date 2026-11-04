@@ -34,6 +34,52 @@ def project_columns(bits: np.ndarray, dtype: str, u: np.ndarray, columns: np.nda
     return from_float(w.astype(np.float32), dtype)
 
 
+def apply_row(bits: np.ndarray, dtype: str, u: np.ndarray, row: np.ndarray) -> np.ndarray:
+    """W' = W - u row^T, the general form of every edit in this file."""
+    w = to_float(bits, dtype).astype(np.float64)
+    return from_float((w - np.outer(u, row)).astype(np.float32), dtype).reshape(bits.shape)
+
+
+def selective_row(w: np.ndarray, u: np.ndarray, target: np.ndarray, neutral: np.ndarray, lam: float,
+                  columns: np.ndarray | None = None, ridge: float = 1e-3) -> np.ndarray:
+    """Row vector that cancels the write along u on target activations and little else.
+
+    Solves min_c E_target[(c.a - u^T W a)^2] + lam E_neutral[(c.a)^2] + mu |c|^2, which is
+    c = (C1 + lam C0 + mu I)^-1 C1 W^T u. This is the MEMIT update (Meng et al., 2023) with
+    a rank 1 residual. As lam grows it approaches a null space edit in the style of
+    AlphaEdit (Fang et al., 2025). With columns given, c is zero outside them.
+    """
+    keep = np.arange(w.shape[1]) if columns is None else np.asarray(columns)
+    write = w.T @ u
+    c1 = target[np.ix_(keep, keep)]
+    c0 = neutral[np.ix_(keep, keep)]
+    system = c1 + lam * c0
+    mu = ridge * np.trace(system) / len(keep)
+    rhs = target[keep] @ write
+    row = np.zeros(w.shape[1])
+    row[keep] = np.linalg.solve(system + mu * np.eye(len(keep)), rhs)
+    return row
+
+
+def neutral_energy(row: np.ndarray, neutral: np.ndarray) -> float:
+    """Mean squared size of the edit's output on neutral activations. Exact, no forward pass."""
+    return float(row @ neutral @ row)
+
+
+def moments(runtime, spans: list[Span], layer: int) -> tuple[np.ndarray, np.ndarray]:
+    """Second moments of the input to down_proj over target and kept tokens."""
+    target = keep = 0.0
+    nt = nk = 0
+    for s in spans:
+        a = runtime.capture(s.tokens, [layer], "mlp")[layer].astype(np.float64)
+        t, k = a[s.target], a[s.keep]
+        target = target + t.T @ t
+        keep = keep + k.T @ k
+        nt += len(t)
+        nk += len(k)
+    return target / max(nt, 1), keep / max(nk, 1)
+
+
 @dataclass
 class Layer:
     index: int
@@ -146,7 +192,11 @@ class Repair:
 
 
 def matched_random(plan: Plan, seed: int = 0) -> list[Layer]:
-    """Same layers, same number of columns, same strength, random orthogonal direction."""
+    """Same layers and columns with a random orthogonal direction.
+
+    Keeping alpha would make a smaller edit, since a random direction overlaps W far less.
+    Callers that compare outcomes should rescale alpha to match the size of the real change.
+    """
     rng = np.random.default_rng(seed)
     out = []
     for l in plan.layers:

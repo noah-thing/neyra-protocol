@@ -86,9 +86,11 @@ class TorchRuntime:
         return lp.gather(1, x[0, index, None])[:, 0].cpu().numpy()
 
     @torch.no_grad()
-    def next_token_logits(self, tokens: list[int]) -> np.ndarray:
+    def logits_at(self, tokens: list[int], positions: np.ndarray) -> np.ndarray:
         x = torch.tensor([tokens], device=self.device)
-        return self.model(x).logits[0, -1].float().cpu().numpy()
+        index = torch.as_tensor(np.asarray(positions), device=self.device)
+        hidden = self.model.model(x[:, :-1]).last_hidden_state[0, index - 1]
+        return self.model.lm_head(hidden).float().cpu().numpy()
 
     def layers(self) -> list:
         m = self.model

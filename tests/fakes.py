@@ -48,8 +48,8 @@ class FakeRuntime:
             rows.append(Rollout(p, list(range(40)), text, not fixed))
         return rows
 
-    def next_token_logits(self, ids):
-        return np.zeros(8)
+    def logits_at(self, ids, positions):
+        return np.zeros((len(positions), 8))
 
     def logprobs(self, tokens, start=1, positions=None):
         return np.zeros(len(tokens) - start if positions is None else len(positions))

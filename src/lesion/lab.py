@@ -352,8 +352,8 @@ class Lab:
         per = {k: float(np.mean([kl_from_logits(a, b).mean() for a, b in zip(base[k], edited[k])])) for k in base}
         return {"mean": float(np.mean(list(per.values()))), "by_domain": per}
 
-    def _position_logits(self, ids: list[int], stride: int = 8) -> np.ndarray:
-        return np.stack([self.rt.next_token_logits(ids[:i]) for i in range(max(2, len(ids) // 2), len(ids), stride)])
+    def _position_logits(self, ids: list[int], stride: int = 4) -> np.ndarray:
+        return self.rt.logits_at(ids, np.arange(max(2, len(ids) // 4), len(ids), stride))
 
     def submit(self, candidate: str, seed: int = 2) -> dict:
         """The one sealed evaluation. Holdout items are never returned."""
