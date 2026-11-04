@@ -54,6 +54,8 @@ class TensorEdit:
             out = from_float(w.astype(np.float32), self.dtype).reshape(-1)
         else:
             out = np.array(base_bits, copy=True).reshape(-1)
+        if self.idx.size and (self.idx.min() < 0 or self.idx.max() >= out.size):
+            raise PatchMismatch(f"{self.name}: patch points outside the tensor")
         out[self.idx] = self.val
         out = out.reshape(self.shape)
         if verify and self.edited_sha256 and bits_sha256(out) != self.edited_sha256:
@@ -159,7 +161,7 @@ def diff_tensor(name: str, dtype: str, base: np.ndarray, edited: np.ndarray) -> 
     d = to_float(edited, dtype).astype(np.float64) - b
     u, s, vh = np.linalg.svd(d, full_matrices=False)
     budget = len(idx) * (8 + ITEMSIZE[dtype])
-    for rank in (1, 2, 4, 8):
+    for rank in (r for r in (1, 2, 4, 8) if r <= len(s)):
         left, right = u[:, :rank] * s[:rank], vh[:rank]
         w = b
         for k in range(rank):

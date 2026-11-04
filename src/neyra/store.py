@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import struct
 import time
@@ -102,7 +103,7 @@ class TensorRef:
 
     @property
     def numel(self) -> int:
-        return int(np.prod(self.shape, dtype=np.int64))
+        return math.prod(self.shape)
 
     def read(self) -> np.ndarray:
         """Raw bits, shaped. Floats stay as unsigned ints of the same width."""
@@ -120,6 +121,27 @@ class TensorRef:
         return h.hexdigest()
 
 
+def _is_count(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+
+def _entry(file: str, name: str, info) -> tuple[str, tuple[int, ...], int, int]:
+    if not isinstance(info, dict):
+        raise FormatError(f"{file}: {name} is not a tensor entry")
+    dtype, shape, offsets = info.get("dtype"), info.get("shape"), info.get("data_offsets")
+    if not isinstance(dtype, str) or dtype not in ITEMSIZE:
+        raise FormatError(f"{file}: {name} has unsupported dtype {dtype!r}")
+    if not isinstance(shape, list) or not all(_is_count(d) for d in shape):
+        raise FormatError(f"{file}: {name} has an invalid shape")
+    if not isinstance(offsets, list) or len(offsets) != 2 or not all(_is_count(o) for o in offsets):
+        raise FormatError(f"{file}: {name} has invalid offsets")
+    begin, end = offsets
+    expected = math.prod(shape) * ITEMSIZE[dtype]
+    if end - begin != expected:
+        raise FormatError(f"{file}: {name} spans {end - begin} bytes, its shape needs {expected}")
+    return dtype, tuple(shape), begin, end
+
+
 def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
     if blob.size < 8:
         raise FormatError(f"{blob.name}: too short to be safetensors")
@@ -128,21 +150,19 @@ def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
         raise FormatError(f"{blob.name}: header length {n} is out of bounds")
     try:
         header = json.loads(blob.read(8, n))
-    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+    except (UnicodeDecodeError, ValueError, RecursionError) as e:
         raise FormatError(f"{blob.name}: header is not JSON") from e
+    if not isinstance(header, dict):
+        raise FormatError(f"{blob.name}: header is not an object")
 
-    meta = header.pop("__metadata__", {}) or {}
+    meta = header.pop("__metadata__", None) or {}
+    if not isinstance(meta, dict) or not all(isinstance(v, str) for v in meta.values()):
+        raise FormatError(f"{blob.name}: __metadata__ must map strings to strings")
     base = 8 + n
     refs = {}
     spans = []
     for name, info in header.items():
-        dtype, shape = info["dtype"], tuple(info["shape"])
-        begin, end = info["data_offsets"]
-        if dtype not in ITEMSIZE:
-            raise FormatError(f"{blob.name}: {name} has unsupported dtype {dtype}")
-        expected = int(np.prod(shape, dtype=np.int64)) * ITEMSIZE[dtype]
-        if end - begin != expected:
-            raise FormatError(f"{blob.name}: {name} spans {end - begin} bytes, shape needs {expected}")
+        dtype, shape, begin, end = _entry(blob.name, name, info)
         spans.append((begin, end, name))
         refs[name] = TensorRef(name, dtype, shape, blob, base + begin, base + end)
 
