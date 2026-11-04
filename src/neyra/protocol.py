@@ -23,6 +23,9 @@ STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
 PREDICATE_TYPE = "https://neyra.run/receipt/v1"
 PAYLOAD_TYPE = "application/vnd.in-toto+json"
 MAX_SAFE = 2**53 - 1
+MAX_DEPTH = 128
+CLAIM_MEMBERS = {"type", "base_root", "result_root", "patch_id", "task", "eval_env", "statements", "gates",
+                 "verdict", "limits"}
 
 
 class ProtocolError(ValueError):
@@ -66,7 +69,7 @@ def jcs(value) -> bytes:
 
 
 def strict_loads(raw: bytes | str):
-    """Parse JSON, refusing duplicate keys and non finite numbers."""
+    """Parse JSON, refusing duplicate keys, non finite numbers and extreme nesting."""
 
     def unique(pairs):
         out = {}
@@ -80,7 +83,26 @@ def strict_loads(raw: bytes | str):
         raise ProtocolError("bad_json", f"{name} is not JSON")
 
     try:
-        return json.loads(raw, object_pairs_hook=unique, parse_constant=no_constant)
+        text = raw.decode("utf-8", "strict") if isinstance(raw, bytes) else raw
+    except UnicodeDecodeError as e:
+        raise ProtocolError("bad_json", "invalid UTF-8") from e
+    depth = deepest = 0
+    quoted = escaped = False
+    for ch in text:
+        if quoted:
+            quoted = escaped or ch != '"'
+            escaped = not escaped and ch == "\\"
+        elif ch == '"':
+            quoted = True
+        elif ch in "[{":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif ch in "]}":
+            depth -= 1
+    if deepest > MAX_DEPTH:
+        raise ProtocolError("bad_json", "nested too deeply")
+    try:
+        return json.loads(text, object_pairs_hook=unique, parse_constant=no_constant)
     except (ValueError, RecursionError) as e:
         if isinstance(e, ProtocolError):
             raise
@@ -209,11 +231,21 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
         raise ProtocolError("not_canonical", "payload is not in canonical form")
     if statement.get("_type") != STATEMENT_TYPE or statement.get("predicateType") != PREDICATE_TYPE:
         raise ProtocolError("bad_type", "wrong statement or predicate type")
-    claim = statement["predicate"]["claim"]
-    subjects = {s["name"]: s["digest"]["sha256"] for s in statement["subject"]}
-    if subjects.get("result-weights") != claim["result_root"].split(":", 1)[1]:
+    predicate = statement.get("predicate")
+    claim = predicate.get("claim") if isinstance(predicate, dict) else None
+    if (not isinstance(claim, dict) or claim.get("type") != "neyra.claim/1" or not CLAIM_MEMBERS <= set(claim)
+            or not {"ledger_head", "ledger_len", "digest_algorithm"} <= set(predicate)):
+        raise ProtocolError("bad_claim", "the predicate does not hold a complete claim")
+    try:
+        subjects = {s["name"]: s["digest"]["sha256"] for s in statement["subject"]}
+        count = len(statement["subject"])
+    except (KeyError, TypeError) as e:
+        raise ProtocolError("subject_mismatch", "malformed subject") from e
+    if count != 2 or set(subjects) != {"result-weights", "patch"}:
+        raise ProtocolError("subject_mismatch", "subject must name the result and the patch")
+    if subjects["result-weights"] != str(claim["result_root"]).split(":", 1)[-1]:
         raise ProtocolError("subject_mismatch", "subject does not match the claim")
-    if subjects.get("patch") != claim["patch_id"].split(":", 1)[1]:
+    if subjects["patch"] != str(claim["patch_id"]).split(":", 1)[-1]:
         raise ProtocolError("subject_mismatch", "patch subject does not match the claim")
     if public is None:
         return Opened(statement, False)

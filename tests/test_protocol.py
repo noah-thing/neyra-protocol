@@ -60,7 +60,9 @@ def test_pae_matches_the_dsse_spec_example():
     assert pae("http://example.com/HelloWorld", b"hello world") == b"DSSEv1 29 http://example.com/HelloWorld 11 hello world"
 
 
-CLAIM = {"result_root": "sha256:" + "a" * 64, "patch_id": "sha256:" + "b" * 64, "verdict": "PASS"}
+CLAIM = {"type": "neyra.claim/1", "base_root": "sha256:" + "0" * 64, "result_root": "sha256:" + "a" * 64,
+         "patch_id": "sha256:" + "b" * 64, "task": {}, "eval_env": {}, "statements": [], "gates": {},
+         "verdict": "PASS", "limits": {}}
 
 
 def keypair():

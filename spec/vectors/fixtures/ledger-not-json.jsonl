@@ -1,0 +1,3 @@
+not json
+{"body":{"metric":"0.500000"},"kind":"sample","prev":"sha256:5ea41093375d5d87b3ce4bc0e681a901e39ff0cd47dcca09d01557c56a3c686c","seq":1,"time":"2026-11-04T12:01:00Z"}
+{"body":{"verdict":"PASS"},"kind":"submit","prev":"sha256:85c455ebcb4decd6df3ef039d05682568d80fa6f5a88677f6d260d6943994ca9","seq":2,"time":"2026-11-04T12:02:00Z"}

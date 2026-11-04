@@ -119,6 +119,48 @@
   }
  },
  {
+  "kind": "jcs",
+  "id": "14",
+  "input_hex": "3031",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "15",
+  "input_hex": "2d30",
+  "expect": {
+   "code": "ok",
+   "hex": "30"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "16",
+  "input_hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+  "expect": {
+   "code": "ok",
+   "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "17",
+  "input_hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "jcs",
+  "id": "invalid-utf8",
+  "input_hex": "22ff22",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
   "kind": "digest",
   "id": "payload",
   "domain": "payload",
@@ -251,6 +293,22 @@
   }
  },
  {
+  "kind": "root",
+  "id": "same-tensor-in-two-files",
+  "model": "fixtures/duplicate-name",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "no-weight-files",
+  "model": "fixtures/empty",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
   "kind": "patch",
   "id": "valid-with-base",
   "file": "fixtures/good.neyra",
@@ -338,6 +396,63 @@
   "file": "fixtures/index-duplicate.neyra",
   "expect": {
    "code": "bad_index"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "missing-result-root",
+  "file": "fixtures/missing-result-root.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "malformed-digest",
+  "file": "fixtures/malformed-digest.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "requires-not-a-list",
+  "file": "fixtures/requires-not-a-list.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "tensor-member-missing",
+  "file": "fixtures/tensor-member-missing.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "val-wrong-dtype",
+  "file": "fixtures/val-wrong-dtype.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "length-mismatch",
+  "file": "fixtures/length-mismatch.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "wrong-base-digest",
+  "file": "fixtures/wrong-base-digest.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "base_mismatch"
   }
  },
  {
@@ -457,6 +572,22 @@
  },
  {
   "kind": "ledger",
+  "id": "ledger-bad-time",
+  "file": "fixtures/ledger-bad-time.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-not-json",
+  "file": "fixtures/ledger-not-json.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
   "id": "ledger-not-canonical",
   "file": "fixtures/ledger-not-canonical.jsonl",
   "expect": {
@@ -549,6 +680,60 @@
   "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
   "expect": {
    "code": "bad_type"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-claim-incomplete",
+  "file": "fixtures/receipt-claim-incomplete.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_claim"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-no-ledger-head",
+  "file": "fixtures/receipt-no-ledger-head.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_claim"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-three-subjects",
+  "file": "fixtures/receipt-three-subjects.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-subjects-reversed-ok",
+  "file": "fixtures/receipt-subjects-reversed-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-bad-sig-base64",
+  "file": "fixtures/receipt-bad-sig-base64.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-two-signatures",
+  "file": "fixtures/receipt-two-signatures.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
   }
  }
 ]

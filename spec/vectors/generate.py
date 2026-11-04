@@ -30,9 +30,11 @@ for i, (text, code) in enumerate([
     ('{"b":1,"a":2}', None), ('{"\\ufb33":1,"\\ud83d\\ude00":2,"a":3}', None), ('[1, 2,  3]', None),
     ('"é\\n\\u0001\\""', None), ('{"a":true,"b":false,"c":null}', None), ('-7', None), ('9007199254740991', None),
     ('{"a":1,"a":2}', "bad_json"), ('1.5', "bad_json"), ('1e3', "bad_json"), ('9007199254740992', "bad_json"),
-    ('NaN', "bad_json"), ('"\\ud800"', "bad_json"), ('{', "bad_json"),
+    ('NaN', "bad_json"), ('"\\ud800"', "bad_json"), ('{', "bad_json"), ('01', "bad_json"),
+    ('-0', None), ('[' * 128 + ']' * 128, None), ('[' * 129 + ']' * 129, "bad_json"),
 ]):
     case("jcs", f"{i}", {"code": code} if code else None, input_hex=text.encode().hex())
+case("jcs", "invalid-utf8", {"code": "bad_json"}, input_hex="22ff22")
 
 for dom, data in (("payload", b""), ("patch", b"abc"), ("weights", b"\x00\xff"), ("ledger", "é".encode())):
     case("digest", dom, domain=dom, data_hex=data.hex())
@@ -66,6 +68,11 @@ model("other", {"w": a, "é.bias": b + 1, "z": c})
 case("root", "one-shard", model="fixtures/base")
 case("root", "two-shards-same-root", model="fixtures/base-resharded")
 case("root", "different", model="fixtures/other")
+model("duplicate-name", {"w": a}, {"w": a})
+(FIX / "empty").mkdir()
+(FIX / "empty" / ".keep").write_text("")
+case("root", "same-tensor-in-two-files", {"code": "bad_safetensors"}, model="fixtures/duplicate-name")
+case("root", "no-weight-files", {"code": "bad_safetensors"}, model="fixtures/empty")
 
 ck = Checkpoint.open(str(base))
 good = Patch([diff_tensor("w", "BF16", a, edited)], {"note": "fixture"}).bind(tensor_table(ck))
@@ -111,6 +118,16 @@ back = np.array([9, 3], dtype="<i8")
 tampered("index-unsorted.neyra", fix_payload(idx=back), {"0.idx": back}, "bad_index")
 dup = np.array([3, 3], dtype="<i8")
 tampered("index-duplicate.neyra", fix_payload(idx=dup), {"0.idx": dup}, "bad_index")
+tampered("missing-result-root.neyra", lambda d: d.pop("result_root"), expect="bad_manifest")
+tampered("malformed-digest.neyra", set_key("base_root", "sha256:XYZ"), expect="bad_manifest")
+tampered("requires-not-a-list.neyra", set_key("requires", "low-rank/1"), expect="bad_manifest")
+tampered("tensor-member-missing.neyra", lambda d: d["tensors"][0].pop("val_digest"), expect="bad_manifest")
+wide_val = np.array([1, 2], dtype=np.uint32)
+tampered("val-wrong-dtype.neyra", fix_payload(val=wide_val), {"0.val": wide_val}, "bad_manifest")
+short_val = np.array([1], dtype=np.uint16)
+tampered("length-mismatch.neyra", fix_payload(val=short_val), {"0.val": short_val}, "bad_manifest")
+tampered("wrong-base-digest.neyra", lambda d: d["tensors"][0].update({"base_digest": "sha256:" + "3" * 64}),
+         expect="base_mismatch", with_base=True)
 tampered("wrong-result-digest.neyra", lambda d: d["tensors"][0].update({"result_digest": "sha256:" + "1" * 64}),
          expect="result_mismatch", with_base=True)
 tampered("wrong-result-root.neyra", set_key("result_root", "sha256:" + "2" * 64), expect="result_mismatch", with_base=True)
@@ -154,6 +171,8 @@ ledger("ledger-dropped.jsonl", [lines[0], lines[2]], expect={"code": "bad_chain"
 ledger("ledger-swapped.jsonl", [lines[1], lines[0], lines[2]], expect={"code": "bad_chain"})
 ledger("ledger-torn.jsonl", lines, tail=b"\n{\"seq\":3", expect={"code": "bad_chain"})
 ledger("ledger-no-final-newline.jsonl", lines, tail=b"", expect={"code": "bad_chain"})
+ledger("ledger-bad-time.jsonl", [lines[0].replace(b"2026-11-04T12:00:00Z", b"yesterday"), lines[1], lines[2]], expect={"code": "bad_chain"})
+ledger("ledger-not-json.jsonl", [b"not json", lines[1], lines[2]], expect={"code": "bad_chain"})
 ledger("ledger-not-canonical.jsonl", [lines[0].replace(b'{"body"', b'{ "body"'), lines[1], lines[2]], expect={"code": "bad_chain"})
 
 secret = bytes(range(32))
@@ -199,6 +218,22 @@ receipt("receipt-bad-type.json", {**signed, "payloadType": "text/plain"}, "bad_t
 stype = json.loads(jcs(statement))
 stype["predicateType"] = "https://example.com/other"
 receipt("receipt-bad-predicate.json", envelope(stype, secret), "bad_type", pub)
+
+missing = json.loads(jcs(statement))
+del missing["predicate"]["claim"]["verdict"]
+receipt("receipt-claim-incomplete.json", envelope(missing, secret), "bad_claim", pub)
+noled = json.loads(jcs(statement))
+del noled["predicate"]["ledger_head"]
+receipt("receipt-no-ledger-head.json", envelope(noled, secret), "bad_claim", pub)
+extra_subject = json.loads(jcs(statement))
+extra_subject["subject"].append({"name": "other", "digest": {"sha256": "0" * 64}})
+receipt("receipt-three-subjects.json", envelope(extra_subject, secret), "subject_mismatch", pub)
+reversed_subject = json.loads(jcs(statement))
+reversed_subject["subject"].reverse()
+receipt("receipt-subjects-reversed-ok.json", envelope(reversed_subject, secret), "ok", pub)
+receipt("receipt-bad-sig-base64.json", {**signed, "signatures": [{**signed["signatures"][0], "sig": "!!!"}]}, "bad_signature", pub)
+two = envelope(statement, other_secret)["signatures"] + signed["signatures"]
+receipt("receipt-two-signatures.json", {**signed, "signatures": two}, "ok", pub)
 
 for c_ in cases:
     if c_["expect"] is None or (c_["kind"] == "ledger" and c_["expect"] is None) or c_["kind"] == "ledger" and c_["expect"] == {"code": "ok"}:

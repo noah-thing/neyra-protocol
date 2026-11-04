@@ -9,11 +9,13 @@ every published head, which is why receipts carry the head.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from .protocol import ProtocolError, digest, jcs, now, plain, strict_loads
 
 GENESIS = "sha256:" + "0" * 64
+TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 
 def entry_digest(entry: dict) -> str:
@@ -32,8 +34,12 @@ def read_entries(path: Path) -> tuple[list[dict], bool]:
     torn = lines[-1] != b""
     entries = []
     for line in lines[:-1]:
-        entry = strict_loads(line)
-        if jcs(entry) != line:
+        try:
+            entry = strict_loads(line)
+            canonical = jcs(entry)
+        except ProtocolError as e:
+            raise BrokenChain(f"entry {len(entries)} does not parse") from e
+        if canonical != line or not isinstance(entry, dict):
             raise BrokenChain(f"entry {len(entries)} is not canonical")
         entries.append(entry)
     return entries, torn
@@ -51,6 +57,8 @@ def walk(entries: list[dict]) -> tuple[str, int]:
     for i, e in enumerate(entries):
         if set(e) != {"seq", "prev", "time", "kind", "body"}:
             raise BrokenChain(f"entry {i} has the wrong members")
+        if not isinstance(e["time"], str) or not TIME.fullmatch(e["time"]):
+            raise BrokenChain(f"entry {i} has a malformed time")
         if e["seq"] != i or e["prev"] != head:
             raise BrokenChain(f"entry {i} does not follow entry {i - 1}")
         head = entry_digest(e)

@@ -177,6 +177,16 @@ def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
     return refs, meta
 
 
+def merge(shards) -> dict[str, TensorRef]:
+    tensors: dict[str, TensorRef] = {}
+    for refs in shards:
+        clash = tensors.keys() & refs.keys()
+        if clash:
+            raise FormatError(f"tensor {sorted(clash)[0]} appears in two files")
+        tensors.update(refs)
+    return tensors
+
+
 def canonical_shards(files: list[str]) -> list[str]:
     """The Hugging Face weights of a repo, skipping second copies such as original/ or consolidated."""
     top = [f for f in files if f.endswith(".safetensors") and "/" not in f]
@@ -221,9 +231,7 @@ class Checkpoint:
                   if path.is_dir() else [path])
         if not shards:
             raise FormatError(f"{path}: no safetensors files")
-        tensors = {}
-        for shard in shards:
-            tensors.update(parse_header(LocalBlob(shard))[0])
+        tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)
         files = sorted(
             str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and ".cache" not in p.parts
         )
@@ -252,7 +260,5 @@ class Checkpoint:
             with urllib.request.urlopen(r) as resp:
                 return resp.read()
 
-        tensors = {}
-        for shard in shards:
-            tensors.update(parse_header(HttpBlob(url(shard), shard, token))[0])
+        tensors = merge(parse_header(HttpBlob(url(shard), shard, token))[0] for shard in shards)
         return cls(f"{repo}@{sha}", tensors, files, read)

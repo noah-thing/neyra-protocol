@@ -1,0 +1,106 @@
+// Command neyra-verify checks Neyra Protocol v1 artifacts.
+package main
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+type vector struct {
+	Kind, ID  string
+	InputHex  string   `json:"input_hex"`
+	Domain    string   `json:"domain"`
+	DataHex   string   `json:"data_hex"`
+	Dtype     string   `json:"dtype"`
+	Shape     []uint64 `json:"shape"`
+	RawHex    string   `json:"raw_hex"`
+	Model     string   `json:"model"`
+	File      string   `json:"file"`
+	Base      string   `json:"base"`
+	PublicHex string   `json:"public_hex"`
+	Expect    struct {
+		Code, Hex, Digest, Root, Head string
+	}
+}
+
+// run returns the observed result in the same shape as vector.Expect.
+func run(dir string, v vector) (string, string) {
+	path := func(p string) string {
+		if p == "" {
+			return ""
+		}
+		return filepath.Join(dir, p)
+	}
+	switch v.Kind {
+	case "jcs":
+		pv, err := parseJSON(unhex(v.InputHex))
+		if err != nil {
+			return string(codeOf(err)), ""
+		}
+		return "ok", hex.EncodeToString(canon(pv))
+	case "digest":
+		return "", digest(v.Domain, unhex(v.DataHex))
+	case "tensor":
+		return "", tensorDigest(tensor{v.Dtype, v.Shape, unhex(v.RawHex)})
+	case "root":
+		ts, err := loadModel(path(v.Model))
+		if err != nil {
+			return string(codeOf(err)), ""
+		}
+		return "", weightsRoot(ts)
+	case "patch":
+		return string(codeOf(verifyPatch(path(v.File), path(v.Base)))), ""
+	case "ledger":
+		head, err := verifyLedger(path(v.File))
+		return string(codeOf(err)), head
+	case "receipt":
+		var pub []byte
+		if v.PublicHex != "" {
+			pub = unhex(v.PublicHex)
+		}
+		return string(codeOf(verifyReceipt(path(v.File), pub))), ""
+	}
+	return "unknown kind " + v.Kind, ""
+}
+
+func vectors(dir string) int {
+	b, err := os.ReadFile(filepath.Join(dir, "cases.json"))
+	var cases []vector
+	if err == nil {
+		err = json.Unmarshal(b, &cases)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	failed := 0
+	for _, v := range cases {
+		c, val := run(dir, v)
+		e := v.Expect
+		ok := (e.Code == "" || e.Code == c) && (e.Hex == "" || e.Hex == val) &&
+			(e.Digest == "" || e.Digest == val) && (e.Root == "" || e.Root == val) && (e.Head == "" || e.Head == val)
+		if e.Code == "ok" && c != "ok" {
+			ok = false
+		}
+		if !ok {
+			failed++
+			fmt.Printf("FAIL %s/%s: got code=%q value=%q, want %+v\n", v.Kind, v.ID, c, val, e)
+		}
+	}
+	fmt.Printf("%d/%d passed\n", len(cases)-failed, len(cases))
+	if failed > 0 {
+		return 1
+	}
+	return 0
+}
+
+func main() {
+	if len(os.Args) != 3 || os.Args[1] != "vectors" {
+		fmt.Fprintln(os.Stderr, "usage: neyra-verify vectors <path to spec/vectors>")
+		os.Exit(2)
+	}
+	os.Exit(vectors(os.Args[2]))
+}
