@@ -1,6 +1,6 @@
 import re
 
-from neyra.doctor import examine
+from neyra.examine import examine
 from neyra.runtime import Rollout
 from neyra.tasks import reasoning_problems
 
@@ -27,13 +27,13 @@ def test_problems_are_reproducible_and_answers_check_out():
     assert int(s.answer) == sum(start + i * step for i in range(terms))
 
 
-def test_doctor_flags_a_looping_model():
+def test_probe_flags_a_looping_model():
     exam = examine(Scripted("Wait, let me check the sum again carefully right now. " * 60, True), n=6)
     names = {s.name: s for s in exam.symptoms}
     assert names["repetition loops"].severity == "serious"
     assert names["thinking never ends"].rate == 1.0
 
 
-def test_doctor_is_quiet_on_a_healthy_model():
+def test_probe_is_quiet_on_a_healthy_model():
     exam = examine(Scripted("short reasoning here</think> so \\boxed{5}", False), n=6)
     assert not exam.symptoms

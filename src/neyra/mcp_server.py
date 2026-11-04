@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
-
 from mcp.server.mcpserver import MCPServer
 
 from .diff import compare as compare_models
 from .export import to_gguf_lora, to_peft
-from .lab import Lab, Task
-from .runtime import open_runtime
+from .lab import Lab
 from .store import Checkpoint
 
 INSTRUCTIONS = """\
@@ -104,20 +100,3 @@ def build(lab: Lab) -> MCPServer:
         raise ValueError("format must be peft or gguf")
 
     return mcp
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(prog="neyra-mcp")
-    ap.add_argument("model")
-    ap.add_argument("task", help="task definition, a JSON file")
-    ap.add_argument("--root", default=".neyra/lab")
-    ap.add_argument("--passes", type=int, default=50)
-    ap.add_argument("--submissions", type=int, default=1)
-    ap.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
-    a = ap.parse_args()
-    lab = Lab(Path(a.root), a.model, Task.load(a.task), open_runtime(a.model, a.backend), a.passes, a.submissions)
-    build(lab).run()
-
-
-if __name__ == "__main__":
-    main()

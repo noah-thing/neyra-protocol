@@ -22,7 +22,6 @@ dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0"]
 
 [project.scripts]
 neyra = "neyra.cli:main"
-neyra-mcp = "neyra.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/neyra"]

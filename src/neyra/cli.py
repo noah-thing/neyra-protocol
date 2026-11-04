@@ -1,32 +1,65 @@
-"""Command line entry point."""
+"""Version control for what a neural network does."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
+import time
+import urllib.error
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+import numpy as np
 
 from . import __version__
 from .diff import Report, compare
-from .patch import Patch, make_patch, write_checkpoint
-from .store import Checkpoint
+from .ledger import BrokenChain
+from .ledger import verify as verify_ledger
+from .numerics import from_float, to_float
+from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
+from .store import Checkpoint, FormatError
+
+SCHEMA = 1
+OK, FINDINGS, USAGE, BAD_INPUT, ENVIRONMENT, FAILED = 0, 1, 2, 3, 4, 5
+EXTRAS = {"mlx": "neyra[mlx]", "mlx_lm": "neyra[mlx]", "torch": "neyra[torch]", "transformers": "neyra[torch]",
+          "mcp": "neyra[mcp]", "gguf": "neyra[gguf]", "huggingface_hub": "neyra[mlx]"}
 
 
-def render(r: Report) -> str:
+class Fail(Exception):
+    def __init__(self, code: int, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def emit(a, document: dict, text: str) -> None:
+    if a.json:
+        print(json.dumps({"schema": SCHEMA, **document}, indent=2))
+    else:
+        print(text)
+
+
+def megabytes(n: int) -> str:
+    return f"{n / 1e6:,.1f} MB"
+
+
+def render(r: Report, seconds: float, read: int, total: int) -> str:
     lines = [f"base   {r.base}", f"other  {r.other}", ""]
     moved = len(r.changes) + len(r.suspected)
     if r.sampled:
-        lines.append(f"{r.tensors} tensors paired, {moved} changed, no difference found in the "
-                     f"other {r.unchanged} (sampled spans only, which is not proof they match)")
+        lines.append(f"{r.tensors} tensors paired, {moved} changed, no difference found in the other "
+                     f"{r.unchanged} (sampled spans only, which is not proof they match)")
     else:
-        lines.append(f"{r.tensors} tensors paired, every byte compared, {r.unchanged} identical, "
-                     f"{moved} changed")
+        lines.append(f"{r.tensors} tensors paired, every byte compared, {r.unchanged} identical, {moved} changed")
     if r.renamed:
         lines.append(f"{r.renamed} tensors matched after stripping wrapper prefixes")
     if r.changes:
         pct = 100 * r.changed_entries / max(r.total_entries, 1)
         lines.append(f"{r.changed_entries:,} entries differ, {pct:.3f}% of the changed tensors")
+    if read:
+        lines.append(f"read {megabytes(read)} of {megabytes(total)} in {seconds:.0f}s")
     lines.append("")
     for s in r.changes:
         lines.append(s.name)
@@ -43,12 +76,10 @@ def render(r: Report) -> str:
         lines.append(f"... and {len(r.suspected) - 40} more")
     for group in r.shared:
         lines.append(f"\nsame direction removed from {len(group)} tensors: {', '.join(group[:6])}")
-    if r.removed:
-        lines.append(f"\n{len(r.removed)} tensors only in base: {', '.join(r.removed[:6])}")
-    if r.added:
-        lines.append(f"\n{len(r.added)} tensors only in other: {', '.join(r.added[:6])}")
-    if r.retyped:
-        lines.append(f"\n{len(r.retyped)} tensors changed dtype or shape: {', '.join(r.retyped[:6])}")
+    for label, items in (("only in base", r.removed), ("only in other", r.added),
+                         ("changed dtype or shape", r.retyped)):
+        if items:
+            lines.append(f"\n{len(items)} tensors {label}: {', '.join(items[:6])}")
     if r.findings:
         lines.append("")
         order = {"high": 0, "medium": 1, "info": 2}
@@ -57,42 +88,55 @@ def render(r: Report) -> str:
     return "\n".join(lines)
 
 
-def report_json(r: Report) -> str:
+def report_document(r: Report, seconds: float, read: int) -> dict:
     def structure(s):
-        return {"name": s.name, "form": s.form, "recipe": s.recipe, "changed": s.changed,
-                "rows": s.rows, "cols": s.cols, "relative": s.relative, "rank": s.rank,
-                "energy": s.energy, "alpha": s.alpha, "side": s.side, "residual": s.residual}
+        return {"name": s.name, "form": s.form, "recipe": s.recipe, "changed": s.changed, "rows": s.rows,
+                "cols": s.cols, "relative": s.relative, "rank": s.rank, "energy": s.energy, "alpha": s.alpha,
+                "side": s.side, "residual": s.residual}
 
-    return json.dumps({
-        "base": r.base, "other": r.other, "tensors": r.tensors, "unchanged": r.unchanged,
-        "sampled": r.sampled, "changes": [structure(s) for s in r.changes],
-        "suspected": r.suspected, "added": r.added, "removed": r.removed, "retyped": r.retyped,
-        "shared_directions": r.shared,
-        "findings": [{"severity": f.severity, "kind": f.kind, "detail": f.detail} for f in r.findings],
-    }, indent=2)
+    return {"base": r.base, "other": r.other, "tensors": r.tensors, "unchanged": r.unchanged, "sampled": r.sampled,
+            "changes": [structure(s) for s in r.changes], "suspected": r.suspected, "added": r.added,
+            "removed": r.removed, "retyped": r.retyped, "shared_directions": r.shared, "bytes_read": read,
+            "seconds": seconds,
+            "findings": [{"severity": f.severity, "kind": f.kind, "detail": f.detail} for f in r.findings]}
 
 
 def cmd_diff(a) -> int:
-    r = compare(Checkpoint.open(a.base), Checkpoint.open(a.other), sample_blocks=a.sample)
-    print(report_json(r) if a.json else render(r))
-    return 1 if any(f.severity == "high" for f in r.findings) else 0
+    base, other = Checkpoint.open(a.base), Checkpoint.open(a.other)
+    t = time.time()
+    r = compare(base, other, sample_blocks=a.sample)
+    seconds = time.time() - t
+    read = base.bytes_read + other.bytes_read
+    emit(a, report_document(r, seconds, read), render(r, seconds, read, base.size + other.size))
+    return FINDINGS if any(f.severity == "high" for f in r.findings) else OK
 
 
 def cmd_patch(a) -> int:
     base, other = Checkpoint.open(a.base), Checkpoint.open(a.other)
     p = make_patch(base, other, {"base": base.spec, "other": other.spec})
     p.save(a.out)
-    print(f"{len(p.edits)} tensors, {p.entries:,} stored entries -> {a.out}\nfingerprint {p.fingerprint}")
-    return 0
+    emit(a, {"tensors": len(p.edits), "entries": p.entries, "path": a.out, "fingerprint": p.fingerprint},
+         f"{len(p.edits)} tensors, {p.entries:,} stored entries -> {a.out}\nfingerprint {p.fingerprint}")
+    return OK
 
 
 def cmd_apply(a) -> int:
     base = Checkpoint.open(a.base)
-    p = Patch.load(a.patch)
-    edited = p.apply(base)
+    edited = Patch.load(a.patch).apply(base)
     write_checkpoint(base, edited, a.out)
-    print(f"{len(edited)} tensors rebuilt and hash verified -> {a.out}")
-    return 0
+    emit(a, {"tensors": len(edited), "path": a.out}, f"{len(edited)} tensors rebuilt and hash verified -> {a.out}")
+    return OK
+
+
+def cmd_show(a) -> int:
+    p = Patch.load(a.patch)
+    rows = [{"tensor": e.name, "shape": list(e.shape), "form": "low rank" if e.low_rank else "sparse",
+             "stored_entries": len(e.idx), "base_sha256": e.base_sha256} for e in p.edits]
+    text = [f"fingerprint {p.fingerprint}", f"{Path(a.patch).stat().st_size:,} bytes"]
+    text += [f"{k}: {v}" for k, v in p.meta.items()]
+    text += [f"{r['tensor']}  {r['form']}, {r['stored_entries']:,} stored entries" for r in rows]
+    emit(a, {"fingerprint": p.fingerprint, "meta": p.meta, "tensors": rows}, "\n".join(text))
+    return OK
 
 
 def local_path(spec: str) -> str:
@@ -104,21 +148,22 @@ def local_path(spec: str) -> str:
     return snapshot_download(repo, revision=rev or None)
 
 
-def cmd_doctor(a) -> int:
-    from .doctor import examine
+def cmd_probe(a) -> int:
+    from .examine import examine
     from .runtime import open_runtime
 
     exam = examine(open_runtime(local_path(a.model), a.backend), a.n, a.max_tokens)
-    print(f"{exam.n} problems, up to {exam.max_tokens} tokens each")
-    print(f"correct {exam.correct:.0%}, mean length {exam.tokens:.0f} tokens\n")
+    text = [f"{exam.n} problems, up to {exam.max_tokens} tokens each",
+            f"correct {exam.correct:.0%}, mean length {exam.tokens:.0f} tokens", ""]
     if not exam.symptoms:
-        print("no symptoms found in this battery, which covers loops, runaway thinking and missing answers")
+        text.append("no symptoms found in this battery, which covers loops, runaway thinking and missing answers")
     for s in exam.symptoms:
-        print(f"[{s.severity}] {s.name}: {s.rate:.0%} of problems")
-        print(f"    {s.explanation}")
+        text += [f"[{s.severity}] {s.name}: {s.rate:.0%} of problems", f"    {s.explanation}"]
         if s.example:
-            print(f"    ...{s.example!r}")
-    return 1 if exam.symptoms else 0
+            text.append(f"    ...{s.example!r}")
+    emit(a, {"n": exam.n, "max_tokens": exam.max_tokens, "correct": exam.correct, "mean_tokens": exam.tokens,
+             "symptoms": [vars(s) for s in exam.symptoms]}, "\n".join(text))
+    return FINDINGS if exam.symptoms else OK
 
 
 def cmd_export(a) -> int:
@@ -130,24 +175,22 @@ def cmd_export(a) -> int:
         info = to_peft(patch, base, a.out, a.energy)
     else:
         if not a.arch:
-            raise SystemExit("gguf export needs --arch, the architecture name in the base GGUF, such as qwen35")
+            raise Fail(USAGE, "gguf export needs --arch, the architecture name in the base GGUF, such as qwen35")
         info = to_gguf_lora(patch, base, a.out, a.arch, a.energy)
-    print(f"{info['bytes']:,} bytes -> {a.out}")
-    return 0
+    emit(a, {"path": a.out, **info}, f"{info['bytes']:,} bytes -> {a.out}")
+    return OK
 
 
 def cmd_verify(a) -> int:
-    from .ledger import BrokenChain, verify
-
     receipt = json.loads(Path(a.receipt).read_text())
     problems = []
+    text = []
     try:
-        head, count = verify(Path(a.ledger))
-        entries = [json.loads(x) for x in Path(a.ledger).read_text().splitlines()]
-        heads = {e["hash"] for e in entries}
-        if receipt["ledger_head"] not in heads:
+        head, count = verify_ledger(Path(a.ledger))
+        hashes = {json.loads(x)["hash"] for x in Path(a.ledger).read_text().splitlines()}
+        if receipt["ledger_head"] not in hashes:
             problems.append("receipt head is not in this ledger")
-        print(f"ledger intact, {count} entries, head {head[:16]}")
+        text.append(f"ledger intact, {count} entries, head {head[:16]}")
     except BrokenChain as e:
         problems.append(f"ledger: {e}")
     if a.patch:
@@ -155,67 +198,188 @@ def cmd_verify(a) -> int:
         if got != receipt["fingerprint"]:
             problems.append("patch fingerprint does not match the receipt")
         else:
-            print(f"patch matches receipt, {got[:16]}")
-    print(f"verdict in receipt: {receipt['verdict']}")
-    for key, passed in receipt["gates"].items():
-        print(f"  {'pass' if passed else 'FAIL'}  {key}")
-    for p in problems:
-        print(f"problem: {p}")
-    return 1 if problems else 0
+            text.append(f"patch matches receipt, {got[:16]}")
+    text.append(f"verdict in receipt: {receipt['verdict']}")
+    text += [f"  {'pass' if ok else 'FAIL'}  {key}" for key, ok in receipt["gates"].items()]
+    text += [f"problem: {p}" for p in problems]
+    emit(a, {"verdict": receipt["verdict"], "gates": receipt["gates"], "problems": problems}, "\n".join(text))
+    return FAILED if problems else OK
+
+
+def cmd_log(a) -> int:
+    verify_ledger(Path(a.ledger))
+    entries = [json.loads(x) for x in Path(a.ledger).read_text().splitlines()]
+    text = []
+    for e in entries:
+        b = e["body"]
+        rest = {k: v for k, v in b.items() if k not in ("seq", "time", "kind")}
+        text.append(f"{b['seq']:>4}  {e['hash'][:10]}  {b['kind']:<14} {json.dumps(rest, default=str)[:90]}")
+    emit(a, {"entries": entries}, "\n".join(text))
+    return OK
+
+
+def cmd_doctor(a) -> int:
+    checks = []
+    for label, module in (("numpy", "numpy"), ("mlx-lm", "mlx-lm"), ("torch", "torch"), ("transformers", "transformers"),
+                          ("mcp", "mcp"), ("gguf", "gguf")):
+        try:
+            checks.append((label, version(module)))
+        except PackageNotFoundError:
+            checks.append((label, None))
+    backend = "mlx" if dict(checks)["mlx-lm"] else "torch" if dict(checks)["torch"] else None
+    text = [f"neyra {__version__}, python {sys.version.split()[0]}", ""]
+    text += [f"{label:<14}{found or 'not installed'}" for label, found in checks]
+    text += ["", f"model backend: {backend or 'none, so diff, patch, apply and export work; probe needs one'}"]
+    free = shutil.disk_usage(Path.home()).free
+    text.append(f"free disk: {free / 1e9:.1f} GB")
+    if not backend:
+        text.append("to run models: uv tool install 'neyra[mlx]' on Apple Silicon, 'neyra[torch]' elsewhere")
+    emit(a, {"version": __version__, "packages": dict(checks), "backend": backend, "free_bytes": free}, "\n".join(text))
+    return OK
+
+
+def cmd_demo(a) -> int:
+    """Plant an edit in a small random model, then recover it from the weights alone."""
+    rng = np.random.default_rng(0)
+    name = "model.layers.3.mlp.down_proj.weight"
+    w = from_float(rng.standard_normal((256, 1024)).astype(np.float32) * 0.02, "BF16")
+    other = from_float(rng.standard_normal(256).astype(np.float32), "BF16")
+    u = rng.standard_normal(256)
+    u /= np.linalg.norm(u)
+    cols = rng.choice(1024, 32, replace=False)
+    f = to_float(w, "BF16").astype(np.float64)
+    edited = f.copy()
+    edited[:, cols] -= 4.0 * np.outer(u, u @ f[:, cols])
+    edited = from_float(edited.astype(np.float32), "BF16").reshape(w.shape)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for label, bits in (("base", w), ("edited", edited)):
+            (root / label).mkdir()
+            write_safetensors(root / label / "model.safetensors", {name: bits, "model.norm.weight": other}, {"format": "pt"})
+        base, changed = Checkpoint.open(str(root / "base")), Checkpoint.open(str(root / "edited"))
+        print("planted: W' = W - 4 u(uᵀW) on 32 random columns of a 256 x 1024 matrix\n")
+        print("$ neyra diff base edited")
+        print(render(compare(base, changed), 0.0, 0, 0).split("\n\n", 1)[1])
+        p = make_patch(base, changed)
+        p.save(root / "edit.neyra")
+        rebuilt = Patch.load(root / "edit.neyra").apply(base)[name]
+        print(f"\n$ neyra patch base edited -o edit.neyra\n{(root / 'edit.neyra').stat().st_size:,} bytes")
+        print(f"\nrebuilt tensor identical to the edited one: {np.array_equal(rebuilt, edited)}")
+    print("\nnext: neyra diff Qwen/Qwen3.5-0.8B RikiyaT/Qwen3.5-0.8B-weight-space-programming --sample 4")
+    return OK
+
+
+def cmd_mcp(a) -> int:
+    from .lab import Lab, Task
+    from .mcp_server import build
+    from .runtime import open_runtime
+
+    path = local_path(a.model)
+    lab = Lab(Path(a.root), path, Task.load(a.task), open_runtime(path, a.backend), a.passes, a.submissions)
+    build(lab).run()
+    return OK
 
 
 def parser() -> argparse.ArgumentParser:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--json", action="store_true", help="machine readable output")
     ap = argparse.ArgumentParser(prog="neyra", description=__doc__)
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("diff", help="what changed between two checkpoints, and how")
+    def command(name, fn, help):
+        p = sub.add_parser(name, help=help, parents=[common])
+        p.set_defaults(fn=fn)
+        return p
+
+    p = command("demo", cmd_demo, "plant an edit in a tiny model and recover it, in seconds, with no downloads")
+
+    p = command("diff", cmd_diff, "what changed between two checkpoints, and how")
     p.add_argument("base")
     p.add_argument("other")
     p.add_argument("--sample", type=int, default=0, metavar="N",
-                   help="screen N random spans per tensor instead of reading everything")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(fn=cmd_diff)
+                   help="screen N random spans per tensor, then read only what differs")
 
-    p = sub.add_parser("patch", help="write the difference between two checkpoints as a patch")
+    p = command("patch", cmd_patch, "write the difference between two checkpoints as a patch")
     p.add_argument("base")
     p.add_argument("other")
     p.add_argument("-o", "--out", required=True)
-    p.set_defaults(fn=cmd_patch)
 
-    p = sub.add_parser("apply", help="rebuild a model from a base and a patch, verifying hashes")
+    p = command("apply", cmd_apply, "rebuild a model from a base and a patch, verifying hashes")
     p.add_argument("base")
     p.add_argument("patch")
     p.add_argument("-o", "--out", required=True)
-    p.set_defaults(fn=cmd_apply)
 
-    p = sub.add_parser("doctor", help="run a model through a fixed battery and report what goes wrong")
+    p = command("show", cmd_show, "describe a patch")
+    p.add_argument("patch")
+
+    p = command("probe", cmd_probe, "run a model through a fixed battery and report what goes wrong")
     p.add_argument("model")
     p.add_argument("-n", type=int, default=32)
     p.add_argument("--max-tokens", type=int, default=3072)
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
-    p.set_defaults(fn=cmd_doctor)
 
-    p = sub.add_parser("export", help="write a patch as a LoRA for PEFT or llama.cpp")
+    p = command("export", cmd_export, "write a patch as a LoRA for PEFT or llama.cpp")
     p.add_argument("base")
     p.add_argument("patch")
     p.add_argument("--format", choices=["peft", "gguf"], required=True)
     p.add_argument("--arch", help="GGUF architecture name, for --format gguf")
     p.add_argument("--energy", type=float, default=0.999, help="share of the change to keep")
     p.add_argument("-o", "--out", required=True)
-    p.set_defaults(fn=cmd_export)
 
-    p = sub.add_parser("verify", help="check a lab receipt against its ledger and patch")
+    p = command("verify", cmd_verify, "check a lab receipt against its ledger and patch")
     p.add_argument("receipt")
     p.add_argument("ledger")
     p.add_argument("--patch")
-    p.set_defaults(fn=cmd_verify)
+
+    p = command("log", cmd_log, "print a lab ledger after checking its chain")
+    p.add_argument("ledger")
+
+    p = command("mcp", cmd_mcp, "serve a lab session to an agent over MCP")
+    p.add_argument("model")
+    p.add_argument("task", help="task definition, a JSON file")
+    p.add_argument("--root", default=".neyra/lab")
+    p.add_argument("--passes", type=int, default=50)
+    p.add_argument("--submissions", type=int, default=1)
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
+
+    command("doctor", cmd_doctor, "check this machine and what it can run")
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except Fail as e:
+        print(f"neyra: {e}", file=sys.stderr)
+        return e.code
+    except ModuleNotFoundError as e:
+        root = (e.name or "").split(".")[0]
+        if root not in EXTRAS:
+            raise
+        print(f"neyra: this needs {root}. Install it with: uv tool install '{EXTRAS[root]}'", file=sys.stderr)
+        return ENVIRONMENT
+    except (FormatError, json.JSONDecodeError) as e:
+        print(f"neyra: bad input: {e}", file=sys.stderr)
+        return BAD_INPUT
+    except PatchMismatch as e:
+        print(f"neyra: {e}", file=sys.stderr)
+        return FAILED
+    except BrokenChain as e:
+        print(f"neyra: ledger has been altered: {e}", file=sys.stderr)
+        return FAILED
+    except urllib.error.HTTPError as e:
+        hint = "check the repo name, or set HF_TOKEN for a gated model" if e.code in (401, 403, 404) else "try again"
+        print(f"neyra: Hugging Face returned {e.code}: {hint}", file=sys.stderr)
+        return BAD_INPUT
+    except FileNotFoundError as e:
+        print(f"neyra: {e.filename}: no such file", file=sys.stderr)
+        return BAD_INPUT
+    except KeyboardInterrupt:
+        print("neyra: interrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

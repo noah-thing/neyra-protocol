@@ -40,13 +40,48 @@ def test_verify_catches_a_swapped_patch_and_edited_ledger(tmp_path, model_dir, r
     doc = json.loads(receipt.read_text())
     doc["fingerprint"] = "0" * 64
     receipt.write_text(json.dumps(doc))
-    assert main(["verify", str(receipt), str(ledger), "--patch", str(patch)]) == 1
+    assert main(["verify", str(receipt), str(ledger), "--patch", str(patch)]) == 5
 
     lines = ledger.read_text().splitlines()
     entry = json.loads(lines[-1])
     entry["body"]["verdict"] = "PASS?"
     lines[-1] = json.dumps(entry)
     ledger.write_text("\n".join(lines) + "\n")
-    assert main(["verify", str(receipt), str(ledger)]) == 1
+    assert main(["verify", str(receipt), str(ledger)]) == 5
 
 
+
+
+def test_demo_runs_and_recovers(capsys):
+    assert main(["demo"]) == 0
+    out = capsys.readouterr().out
+    assert "4.0" in out and "32 of 1024 columns" in out and "identical to the edited one: True" in out
+
+
+def test_json_everywhere(tmp_path, model_dir, rng, capsys):
+    w = bf16(rng.standard_normal((16, 32)) * 0.1)
+    edited = w.copy()
+    edited[:, :4] = 0
+    a, b = model_dir("a", {"w": w}), model_dir("b", {"w": edited})
+    p = str(tmp_path / "p.neyra")
+    for argv in (["diff", str(a), str(b)], ["patch", str(a), str(b), "-o", p], ["show", p], ["doctor"]):
+        assert main([*argv, "--json"]) == 0
+        assert json.loads(capsys.readouterr().out)["schema"] == 1
+
+
+def test_errors_have_codes_and_no_traceback(tmp_path, capsys):
+    bad = tmp_path / "bad.neyra"
+    bad.write_bytes(b"not a patch at all")
+    assert main(["show", str(bad)]) == 3
+    assert "bad input" in capsys.readouterr().err
+
+
+def test_wrong_base_is_a_verification_failure(tmp_path, model_dir, rng, capsys):
+    w = bf16(rng.standard_normal((8, 8)))
+    edited = w.copy()
+    edited[0, 0] += 5
+    a, b = model_dir("a", {"w": w}), model_dir("b", {"w": edited})
+    p = str(tmp_path / "p.neyra")
+    main(["patch", str(a), str(b), "-o", p])
+    c = model_dir("c", {"w": bf16(rng.standard_normal((8, 8)))})
+    assert main(["apply", str(c), p, "-o", str(tmp_path / "o")]) == 5

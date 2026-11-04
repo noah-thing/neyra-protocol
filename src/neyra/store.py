@@ -186,6 +186,14 @@ class Checkpoint:
         self.files = files
         self._reader = reader
 
+    @property
+    def size(self) -> int:
+        return sum({id(r.blob): r.blob.size for r in self.tensors.values()}.values())
+
+    @property
+    def bytes_read(self) -> int:
+        return sum({id(r.blob): getattr(r.blob, "bytes_read", 0) for r in self.tensors.values()}.values())
+
     def raw(self, path: str) -> bytes | None:
         return self._reader(path) if path in self.files else None
 
