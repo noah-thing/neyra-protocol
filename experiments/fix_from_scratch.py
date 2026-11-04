@@ -29,7 +29,7 @@ t0 = time.time()
 rt = MlxRuntime(a.model)
 ck = Checkpoint.open(a.model)
 rows = json.loads(Path(a.rollouts).read_text())
-ids = [rt.tokenizer.encode(r["text"], add_special_tokens=False) for r in rows]
+ids = [r["tokens"] for r in rows if r["looping"]]
 spans = loop_spans(ids, 1024)
 print(len(spans), "texts with repetition", flush=True)
 half = len(spans) * 2 // 3

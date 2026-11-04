@@ -1,6 +1,6 @@
 """Which of the 128 edited columns in the published Qwen3.5-0.8B edit do the work?
 
-Teacher forced search over base model rollouts, so every trial is deterministic.
+Searches on teacher forced base model loops, then confirms once on loops it never saw.
 """
 
 import argparse
@@ -8,58 +8,36 @@ import json
 import time
 from pathlib import Path
 
-from neyra.bisect import bisect
 from neyra.interop import from_weight_space_logs
-from neyra.probe import SelectivityProbe, loop_spans
 from neyra.runtime.mlx import MlxRuntime
 from neyra.store import Checkpoint
-from neyra.units import UnitSet
+from neyra.workflows import bisect_loops
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model")
 ap.add_argument("edit_dir")
-ap.add_argument("rollouts")
+ap.add_argument("rollouts", help="JSON list of rows with tokens")
 ap.add_argument("-o", "--out", default="bisect_wsp.json")
-ap.add_argument("--texts", type=int, default=16)
-ap.add_argument("--length", type=int, default=1536)
+ap.add_argument("--texts", type=int, default=18)
 ap.add_argument("--retain", type=float, default=0.9)
 a = ap.parse_args()
 
+t0 = time.time()
 rt = MlxRuntime(a.model)
 ck = Checkpoint.open(a.model)
-units = UnitSet(from_weight_space_logs(a.edit_dir, ck), ck, "column")
-print(len(units), "units", flush=True)
-
 rows = json.loads(Path(a.rollouts).read_text())
-ids = [rt.tokenizer.encode(r["text"], add_special_tokens=False) for r in rows]
-spans = loop_spans(ids, a.length, a.texts)
-print(len(spans), "texts,", sum(s.target.sum() for s in spans), "target tokens", flush=True)
-
-probe = SelectivityProbe(rt, spans)
-t0 = time.time()
-count = 0
-
-
-def measure(chosen):
-    global count
-    rt.set_tensors(units.tensors(chosen))
-    m = probe()
-    count += 1
-    if count % 20 == 0:
-        print(count, "trials", round(time.time() - t0), "s", flush=True)
-    return m
-
-
-r = bisect(len(units), measure, retain=a.retain)
-rt.reset()
+tokens = [r["tokens"] for r in rows if r["looping"]][:a.texts]
+patch = from_weight_space_logs(a.edit_dir, ck)
+b = bisect_loops(rt, ck, patch, tokens, retain=a.retain, budget=700)
+b.patch.save(Path(a.out).with_suffix(".neyra"))
+r, c = b.result, b.check
 Path(a.out).write_text(json.dumps({
-    "units": [str(units.units[i]) for i in r.units],
-    "total": r.total, "retained": r.retained, "minimal": r.minimal,
-    "baseline": r.baseline.value, "full": r.full.value, "achieved": r.achieved.value,
-    "weights_full": units.weights_changed(range(len(units))),
-    "weights_kept": units.weights_changed(r.units),
-    "ranking": [[str(units.units[i]), s] for i, s in r.ranking],
-    "trials": len(r.trials), "seconds": time.time() - t0,
+    "units": [str(b.units.units[i]) for i in r.units], "total": r.total, "search_retained": r.retained,
+    "minimal": r.minimal, "baseline": r.baseline.value, "full": r.full.value, "achieved": r.achieved.value,
+    "weights_full": b.units.weights_changed(range(len(b.units))), "weights_kept": b.units.weights_changed(r.units),
+    "confirmed": c.passed, "confirmed_retained": c.retained, "confirm_low": c.low, "confirm_items": c.n,
+    "ranking": [[str(b.units.units[i]), s] for i, s in r.ranking], "trials": len(r.trials),
+    "seconds": time.time() - t0, "patch_id": b.patch.id,
 }, indent=1))
-print(f"{len(r.units)} of {r.total} units keep {r.retained:.3f} of the effect, minimal={r.minimal}, "
-      f"{len(r.trials)} trials, {time.time() - t0:.0f}s")
+print(f"{len(r.units)} of {r.total} units, confirmed={c.passed} retained={c.retained:.3f} on {c.n} unseen texts, "
+      f"search retained {r.retained:.3f}, minimal={r.minimal}, {time.time() - t0:.0f}s", flush=True)
