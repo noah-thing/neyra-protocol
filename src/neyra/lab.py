@@ -23,7 +23,7 @@ import numpy as np
 
 from . import __version__
 from .behavior import score
-from .bisect import Measure, bisect, confirm
+from .bisect import BLAME, Measure, bisect, confirm
 from .ledger import Ledger
 from .numerics import from_float, is_float, to_float
 from .patch import Patch, TensorEdit, diff_tensor
@@ -421,14 +421,15 @@ class Lab:
         edits = []
         for name, (bits, dtype) in units.tensors(r.units).items():
             edits.append(diff_tensor(name, dtype, units.base[name], bits))
-        added = self._add(Patch(edits, {"bisected_from": candidate, "retain": retain}), f"bisect of {candidate}")
-        result = {"kept_units": len(r.units), "total_units": r.total, "minimal": r.minimal,
+        added = self._add(Patch(edits, {"bisected_from": candidate, "retain": retain, "blame": BLAME}),
+                          f"bisect of {candidate}")
+        result = {"blame": BLAME, "kept_units": len(r.units), "total_units": r.total, "minimal": r.minimal,
                   "search_retained": r.retained, "trials": len(r.trials),
                   "confirmed": check.passed, "confirmed_retained": check.retained, "confirm_items": check.n,
                   "weights_full": units.weights_changed(range(len(units))),
                   "weights_kept": units.weights_changed(r.units), **added}
         self.ledger.append("bisect", candidate=candidate, **{k: result[k] for k in (
-            "kept_units", "total_units", "confirmed", "confirmed_retained")})
+            "blame", "kept_units", "total_units", "confirmed", "confirmed_retained")})
         return result
 
     def drift(self, candidate: str) -> dict:

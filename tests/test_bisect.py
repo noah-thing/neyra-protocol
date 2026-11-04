@@ -126,3 +126,16 @@ def test_large_edits_use_banzhaf_and_stay_affordable():
 
     assert set(bisect(400, measure).units) == {7, 300}
     assert len(calls) < 400
+
+
+def test_every_trial_adds_a_subset_to_the_base():
+    """Insertion, not ablation: the measure is only ever asked about subsets applied to the base."""
+    asked = []
+
+    def measure(units):
+        asked.append(units)
+        return Measure(float(len(set(units) & {1, 4})))
+
+    r = bisect(8, measure)
+    assert r.blame == "insertion"
+    assert all(list(u) == sorted(u) and set(u) <= set(range(8)) for u in asked)

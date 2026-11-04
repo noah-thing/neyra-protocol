@@ -15,10 +15,12 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
+from .check import DIFFERENT, EQUIVALENT, IDENTICAL, MISSING, NEVER_APPLIED, ROUNDING, check
 from .conformance import check_binding
 from .diff import Report, compare
 from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
+from .merge import merge
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
 from .protocol import ProtocolError, new_key, open_envelope, strict_loads
@@ -133,6 +135,60 @@ def cmd_apply(a) -> int:
     return OK
 
 
+def cmd_merge(a) -> int:
+    if len(a.patches) < 2:
+        raise Fail(USAGE, "merge needs at least two patches")
+    base = Checkpoint.open(a.base)
+    m = merge(base, [Patch.load(p) for p in a.patches])
+    m.patch.save(a.out)
+    shared, differ = sum(o.entries for o in m.overlaps), sum(o.disagree for o in m.overlaps)
+    text = [f"{len(a.patches)} patches merged, {len(m.patch.edits)} tensors, {m.patch.entries:,} stored entries -> {a.out}",
+            f"patch {m.patch.id}"]
+    if shared:
+        text.append(f"{shared:,} entries touched by more than one patch, in {len(m.overlaps)} tensors, "
+                    f"{differ:,} with different values")
+        text += [f"    {o.name}: {o.entries:,} shared, {o.disagree:,} different" for o in m.overlaps[:20]]
+        text.append("edits to a shared entry are added, so two patches making the same change apply it twice")
+    emit(a, {"patches": len(a.patches), "tensors": len(m.patch.edits), "entries": m.patch.entries, "path": a.out,
+             "patch_id": m.patch.id, "shared_entries": shared, "different_values": differ,
+             "overlaps": [vars(o) for o in m.overlaps]}, "\n".join(text))
+    return FINDINGS if shared else OK
+
+
+def cmd_check(a) -> int:
+    base, merged = Checkpoint.open(a.base), Checkpoint.open(a.merged)
+    adapter = Checkpoint.open(a.adapter) if a.adapter else None
+    c = check(base, merged, adapter, a.ulps)
+    counts = {s: c.count(s) for s in (IDENTICAL, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
+    text = [f"base    {base.spec}", f"merged  {merged.spec}"]
+    if adapter:
+        text.append(f"adapter {adapter.spec}, {c.modules} modules")
+    text.append(f"{len(c.tensors)} tensors: {counts[IDENTICAL]} identical, {counts[ROUNDING]} equal under rounding, "
+                f"{counts[DIFFERENT]} different, {counts[MISSING]} missing, {counts[NEVER_APPLIED]} never applied")
+    if c.targeted and counts[NEVER_APPLIED] == c.targeted:
+        text.append(f"\nTHE ADAPTER WAS NEVER APPLIED: every tensor it edits ({c.targeted}) equals the base, "
+                    "though the adapter changes them")
+    elif counts[NEVER_APPLIED]:
+        text.append(f"\n{counts[NEVER_APPLIED]} of the {c.targeted} tensors the adapter edits were not changed")
+    if c.leftover:
+        text.append(f"\nthe merged file still holds {len(c.leftover)} separate adapter tensors, such as {c.leftover[0]}")
+    if c.added:
+        text.append(f"\n{len(c.added)} tensors are only in the merged model, such as {c.added[0]}")
+    shown = [t for t in c.tensors if t.status != IDENTICAL or t.detail]
+    text += [""] if shown else []
+    for t in shown[:30]:
+        share = "" if t.applied is None or t.status in EQUIVALENT else f", {t.applied:.0%} of the delta present"
+        text.append(f"{t.name}\n    {t.status}: {t.detail}{share}")
+    if len(shown) > 30:
+        text.append(f"... and {len(shown) - 30} more")
+    text.append("\n" + ("equivalent" if c.equivalent else "NOT equivalent"))
+    emit(a, {"base": base.spec, "merged": merged.spec, "adapter": adapter.spec if adapter else None,
+             "equivalent": c.equivalent, "counts": counts, "adapter_tensors": c.targeted,
+             "adapter_modules": c.modules, "added": c.added, "leftover_adapter_tensors": c.leftover,
+             "tensors": [vars(t) for t in c.tensors]}, "\n".join(text))
+    return OK if c.equivalent else FINDINGS
+
+
 def cmd_show(a) -> int:
     p = Patch.load(a.patch)
     rows = [{"tensor": e.name, "shape": list(e.shape), "form": "low rank" if e.low_rank else "sparse",
@@ -206,11 +262,12 @@ def cmd_bisect(a) -> int:
     r, c = b.result, b.check
     kept, total = b.units.weights_changed(r.units), b.units.weights_changed(range(len(b.units)))
     verdict = "confirmed" if c.passed else "NOT confirmed"
-    emit(a, {"kept_units": len(r.units), "total_units": r.total, "kept_weights": kept, "total_weights": total,
+    emit(a, {"blame": r.blame, "kept_units": len(r.units), "total_units": r.total, "kept_weights": kept, "total_weights": total,
              "minimal": r.minimal, "confirmed": c.passed, "confirmed_retained": c.retained, "confirm_items": c.n,
              "path": a.out, "patch_id": b.patch.id},
          f"{len(r.units)} of {r.total} units, {kept:,} of {total:,} weights -> {a.out}\n"
          f"{verdict} on {c.n} unseen texts: keeps {c.retained:.0%} of the effect\n"
+         f"blame is {r.blame}: each subset was added to the base alone, not removed from the full edit\n"
          f"{'no single unit can be removed' if r.minimal else 'search budget ran out before this was minimal'}")
     return OK if c.passed else FINDINGS
 
@@ -369,6 +426,17 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("base")
     p.add_argument("patch")
     p.add_argument("-o", "--out", required=True)
+
+    p = command("merge", cmd_merge, "combine patches made on one base, exactly and in any order")
+    p.add_argument("base")
+    p.add_argument("patches", nargs="+")
+    p.add_argument("-o", "--out", required=True)
+
+    p = command("check", cmd_check, "decide whether a merged model matches its base and adapter")
+    p.add_argument("base")
+    p.add_argument("merged")
+    p.add_argument("--adapter", help="PEFT LoRA adapter directory that was merged into the base")
+    p.add_argument("--ulps", type=int, default=1, help="steps of the dtype two tensors may differ by and still count as rounding")
 
     p = command("show", cmd_show, "describe a patch")
     p.add_argument("patch")

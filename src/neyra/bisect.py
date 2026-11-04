@@ -12,6 +12,12 @@ not guaranteed to be the smallest set, and a different start can find another on
 The search looks at one set of items many times and keeps its best find, so its own
 numbers are biased upward by selection. They are not evidence. Evidence comes from
 confirm(), which measures the final set once on items the search never saw.
+
+"Blame" can mean four different measurements: movement (q after a step minus q before it),
+ablation (remove one part from the finished model), insertion (add one part alone to the base)
+and replay (rerun the history without it). They answer different questions and can disagree.
+Every trial here applies a subset of the edit to the base model and nothing else, so what
+this module reports is insertion, and BLAME says so wherever a result is recorded.
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 Units = tuple[int, ...]
+BLAME = "insertion"
 
 
 @dataclass(frozen=True)
@@ -49,6 +56,7 @@ class Result:
     minimal: bool
     trials: list[Trial] = field(default_factory=list)
     ranking: list[tuple[int, float]] = field(default_factory=list)
+    blame: str = BLAME
 
     @property
     def effect(self) -> float:

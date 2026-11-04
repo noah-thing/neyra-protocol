@@ -96,7 +96,8 @@ def build(lab: Lab) -> MCPServer:
 
     @mcp.tool()
     def bisect(candidate: str, rollouts: str, retain: float = 0.9, grain: str = "column") -> dict:
-        """Smallest part of a candidate that keeps the effect. Adds it as a new candidate. Costs 1 pass."""
+        """Smallest part of a candidate that keeps the effect when added to the base alone (blame is
+        insertion, not ablation or replay). Adds it as a new candidate. Costs 1 pass."""
         return lab.bisect(candidate, rollouts, retain, grain)
 
     @mcp.tool()

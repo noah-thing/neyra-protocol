@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .behavior import is_looping
-from .bisect import Confirmation, Measure, Result, bisect, confirm
+from .bisect import BLAME, Confirmation, Measure, Result, bisect, confirm
 from .patch import Patch, diff_tensor
 from .probe import SelectivityProbe, loop_spans
 from .protocol import tensor_table
@@ -100,7 +100,7 @@ def bisect_loops(runtime, ck: Checkpoint, patch: Patch, token_lists: list[list[i
     check = confirm(len(units), result.units, using(SelectivityProbe(runtime, check_spans)), retain)
     runtime.reset()
     edits = [diff_tensor(n, d, units.base[n], b) for n, (b, d) in units.tensors(result.units).items()]
-    kept = Patch(edits, {"bisected_from": patch.id, "retain": retain}).bind(tensor_table(ck))
+    kept = Patch(edits, {"bisected_from": patch.id, "retain": retain, "blame": BLAME}).bind(tensor_table(ck))
     return Bisection(result, check, units, kept)
 
 

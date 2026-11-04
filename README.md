@@ -39,6 +39,9 @@ Both work on any machine with Python 3.10 or later, with no GPU. To run models, 
 |---|---|
 | `neyra diff` | What changed between two checkpoints, local or on the Hub, including chat templates, removed parts and new code files |
 | `neyra patch`, `apply`, `show` | Store an edit as a small exact file, rebuild it bit for bit, inspect it |
+| `neyra merge` | Combine several patches made on one base into one patch, with the same bytes in any order |
+| `neyra check` | Decide whether a merged model matches its base and its LoRA adapter, and say if the adapter was never applied |
+| `neyra bisect` | Find the smallest part of a patch that keeps its effect on a behavior |
 | `neyra export` | Turn a patch into a LoRA for PEFT or stock llama.cpp |
 | `neyra probe` | Run a model through a fixed battery and report loops, runaway thinking and missing answers |
 | `neyra verify`, `log`, `keygen` | Check signed receipts and tamper evident ledgers |
@@ -61,6 +64,58 @@ for the part of an edit that matters. It treats the agent as an untrusted party:
 
 A receipt is an in-toto statement in a DSSE envelope, signed with Ed25519. A signature shows who made
 a claim. It does not show the claim is true, so receipts name everything needed to rerun it.
+
+## Merging patches
+
+```sh
+neyra merge BASE a.neyra b.neyra c.neyra -o merged.neyra
+neyra apply BASE merged.neyra -o merged-model
+```
+
+Merging published models one after another gives a different answer for each order, because every step
+rounds to bf16. At one entry with value 1 - 2^-8, three patches that each add 2^-8 give 1.0 when merged
+in pairs and 1 + 2^-7 when added together. `merge` adds all the deltas exactly, as integers, and rounds
+once to the tensor dtype, so any order writes the same file. [`tests/test_merge.py`](tests/test_merge.py)
+checks this against a brute force rounding and against all 24 orders of four patches.
+
+Entries that only one patch touches are copied. Where patches overlap, `merge` reports how many entries
+they share and how many of those got different values, and exits with 1. It does not judge whether the
+result is a good model. Two patches that make the same change apply it twice, since deltas add.
+
+## Checking a merge
+
+```sh
+neyra check BASE MERGED --adapter ADAPTER_DIR
+neyra check BASE OTHER
+```
+
+Given a base, a PEFT LoRA adapter and the merged safetensors, `check` recomputes the merge two ways: one
+rounding of the exact sum, and PEFT's own path, which casts the delta to the model dtype before adding.
+Each tensor comes out as identical, equal under rounding (it matches one recomputation, or is within
+`--ulps` steps of it), or different. A tensor the adapter edits but that still equals the base is reported
+as never applied, and if that is every edited tensor the report says so first. A different tensor shows
+how much of the delta is present, so a doubled or halved scale is visible. Leftover `lora_` tensors in the
+merged file also fail the check. The exit code is 0 when the models are equivalent and 1 otherwise. DoRA
+and embedding adapters are not supported, and the float32 matrix product may differ from torch in the
+last bit, which `--ulps` absorbs.
+
+## What bisect measures
+
+"Blame" names four different measurements, and they can disagree:
+
+| Name | Question |
+|---|---|
+| movement | how much did the behavior change at this step of the history |
+| ablation | how much is lost removing this part from the finished model |
+| insertion | how much comes back adding this part alone to the base |
+| replay | what happens if the history is run again without it |
+
+`neyra bisect` reports insertion. Every trial applies a subset of the patch to the base model and measures
+the behavior, and the answer is the smallest subset that keeps the chosen share of the full effect. It
+does not say that removing those units from the full patch would remove the behavior, and it says nothing
+about training history. Results carry `"blame": "insertion"` in the command's JSON, the lab result, the
+ledger entry and the metadata of the patch it writes. Patch identity and the protocol vectors do not
+depend on any of these.
 
 ## The protocol
 

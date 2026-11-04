@@ -75,3 +75,4 @@ def test_bisect_finds_the_columns_that_matter_and_confirms(model_dir, rng):
     assert {b.units.units[i].index for i in b.result.units} == {2, 5}
     assert b.check.passed and b.check.retained > 0.95
     assert len(b.patch.edits[0].idx) < len(patch.edits[0].idx)
+    assert b.result.blame == b.patch.meta["blame"] == "insertion"

@@ -219,3 +219,25 @@ def test_withheld_mode_is_visible_and_blocks_diffing(tmp_path, model_dir, rng, w
             lab.require_base()
     else:
         lab.require_base()
+
+
+class Measuring(FakeRuntime):
+    """Scores a text by how many weight columns differ from the base."""
+
+    def logprobs(self, tokens, start=1, positions=None):
+        out = np.zeros(len(tokens) - start if positions is None else len(positions))
+        if NAME in self.current:
+            bits, dtype = self.current[NAME]
+            out[: len(out) // 2] = -np.count_nonzero((to_float(bits, dtype) != self.base).any(axis=0))
+        return out
+
+
+def test_bisect_says_what_it_measured(tmp_path, model_dir, rng):
+    lab, w, u = setup(tmp_path, model_dir, rng)
+    lab.rt = Measuring(w, u)
+    c = real_edit(lab, w, u, tmp_path)
+    r = lab.bisect(c, lab.sample()["rollouts"])
+    assert r["blame"] == "insertion"
+    entry = next(e for e in read_jsonl(lab.root / "ledger.jsonl") if e["kind"] == "bisect")
+    assert entry["body"]["blame"] == "insertion"
+    assert lab.candidate(r["candidate"]).patch.meta["blame"] == "insertion"
