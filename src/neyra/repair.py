@@ -117,7 +117,7 @@ def collect(runtime, spans: list[Span], layers: list[int]) -> dict[int, dict[str
             for i, a in sums.items()}
 
 
-def writers(bits: np.ndarray, dtype: str, stats: dict[str, np.ndarray], k: int) -> tuple:
+def strongest_columns(bits: np.ndarray, dtype: str, stats: dict[str, np.ndarray], k: int) -> tuple:
     diff = stats["target"] - stats["keep"]
     u = diff / np.linalg.norm(diff)
     w = to_float(bits, dtype).astype(np.float64)
@@ -144,7 +144,7 @@ class Repair:
         out = {}
         for i in layers:
             _, bits, dtype = self._bits(i)
-            u, cols, write = writers(bits, dtype, stats[i], self.k)
+            u, cols, write = strongest_columns(bits, dtype, stats[i], self.k)
             out[i] = Layer(i, u, cols, write)
         return out
 
