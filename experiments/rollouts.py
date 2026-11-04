@@ -10,6 +10,7 @@ import numpy as np
 
 from neyra.behavior import score
 from neyra.interop import from_weight_space_logs
+from neyra.lab import read_jsonl
 from neyra.patch import Patch
 from neyra.runtime import Sampling
 from neyra.runtime.mlx import MlxRuntime
@@ -38,7 +39,7 @@ if a.patch:
 
 items = []
 for source in ("gsm8k_train", "math_train"):
-    rows = [json.loads(x) for x in Path(f"{a.practice}/{source}.jsonl").read_text().splitlines()]
+    rows = read_jsonl(f"{a.practice}/{source}.jsonl")
     order = random.Random(a.seed).sample(rows, a.offset + a.per_source)
     items += order[a.offset:]
 

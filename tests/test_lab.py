@@ -5,7 +5,7 @@ import pytest
 from conftest import bf16
 from fakes import NAME, FakeRuntime
 
-from neyra.lab import BudgetSpent, Item, Lab, Refused, Task
+from neyra.lab import BudgetSpent, Item, Lab, Refused, Task, read_jsonl
 from neyra.ledger import verify
 from neyra.numerics import to_float
 from neyra.patch import Patch, diff_tensor
@@ -161,3 +161,9 @@ def test_allowed_directory_is_opt_in(tmp_path, model_dir, rng):
     p = extra / "e.neyra"
     Patch([diff_tensor(NAME, "BF16", w, project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape))]).save(p)
     assert lab.propose_from_file(str(p))["candidate"] == "c0"
+
+
+def test_jsonl_survives_unicode_line_separators(tmp_path):
+    p = tmp_path / "x.jsonl"
+    p.write_text(json.dumps({"problem": "a\u2028b"}, ensure_ascii=False) + "\n")
+    assert read_jsonl(p) == [{"problem": "a\u2028b"}]

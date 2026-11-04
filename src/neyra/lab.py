@@ -55,6 +55,11 @@ def inside(path: str | Path, roots: list[Path]) -> Path:
     return p
 
 
+def read_jsonl(path: str | Path) -> list[dict]:
+    # str.splitlines also breaks on U+2028 and friends, which are valid inside JSON strings.
+    return [json.loads(x) for x in Path(path).read_text().split("\n") if x.strip()]
+
+
 @dataclass
 class Item:
     id: str
@@ -91,7 +96,7 @@ class Task:
         root = Path(path).parent
 
         def items(ref):
-            rows = [json.loads(x) for x in (root / ref).read_text().splitlines() if x.strip()]
+            rows = read_jsonl(root / ref)
             return [Item(str(r["id"]), r.get("prompt") or r["problem"], r.get("answer")) for r in rows]
 
         known = {k: doc[k] for k in ("metric", "suffix", "max_tokens", "thinking", "max_kl", "alternatives") if k in doc}
