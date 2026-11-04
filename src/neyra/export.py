@@ -13,20 +13,10 @@ from pathlib import Path
 
 import numpy as np
 
+from .families import classify, text_config, v_head_order
 from .numerics import to_float
 from .patch import Patch, write_safetensors
 from .store import Checkpoint
-
-GGUF_NAMES = {
-    r"mlp\.down_proj": "ffn_down",
-    r"mlp\.gate_proj": "ffn_gate",
-    r"mlp\.up_proj": "ffn_up",
-    r"self_attn\.o_proj": "attn_output",
-    r"self_attn\.q_proj": "attn_q",
-    r"self_attn\.k_proj": "attn_k",
-    r"self_attn\.v_proj": "attn_v",
-    r"linear_attn\.out_proj": "ssm_out",
-}
 
 
 def factorize(delta: np.ndarray, energy: float = 0.9999, max_rank: int = 64) -> tuple[np.ndarray, np.ndarray]:
@@ -74,12 +64,22 @@ def to_peft(patch: Patch, base: Checkpoint, out: str | Path, energy: float = 0.9
 
 
 def gguf_tensor(name: str) -> str:
-    layer = re.search(r"layers\.(\d+)\.", name)
-    if layer:
-        for pattern, target in GGUF_NAMES.items():
-            if re.search(pattern, name):
-                return f"blk.{layer.group(1)}.{target}.weight"
-    raise KeyError(f"no GGUF name known for {name}")
+    w = classify(name)
+    if w is None:
+        raise KeyError(f"{name} is not a tensor llama.cpp can take a LoRA on")
+    if w.kind.startswith("expert"):
+        raise KeyError(f"{name}: expert adapters must be 3D in GGUF, which export does not write yet")
+    return w.gguf
+
+
+def reorder_for_gguf(name: str, a: np.ndarray, config: dict) -> np.ndarray:
+    w = classify(name)
+    if w is None or w.kind != "linear_out":
+        return a
+    nk, nv = config.get("linear_num_key_heads"), config.get("linear_num_value_heads")
+    if not nk or not nv or nk == nv:
+        return a
+    return a[:, v_head_order(a.shape[1], nk, nv)]
 
 
 def to_gguf_lora(patch: Patch, base: Checkpoint, out: str | Path, arch: str, energy: float = 0.9999) -> dict:
@@ -89,11 +89,12 @@ def to_gguf_lora(patch: Patch, base: Checkpoint, out: str | Path, arch: str, ene
     writer.add_string("general.type", "adapter")
     writer.add_string("adapter.type", "lora")
     writer.add_string("general.name", f"neyra {patch.fingerprint[:12]}")
+    config = text_config(base)
     ranks = {}
     pending = []
     for name, delta in deltas(patch, base).items():
         b, a = factorize(delta, energy)
-        pending.append((gguf_tensor(name), a, b))
+        pending.append((gguf_tensor(name), reorder_for_gguf(name, a, config), b))
         ranks[name] = b.shape[1]
     rank = max(ranks.values())
     if len(set(ranks.values())) > 1:

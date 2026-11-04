@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .families import writers
 from .numerics import from_float, to_float
 from .patch import Patch, diff_tensor
 from .probe import SelectivityProbe, Span
@@ -19,11 +20,12 @@ from .store import Checkpoint
 
 
 def down_proj_name(ck: Checkpoint, layer: int) -> str:
-    suffix = f"layers.{layer}.mlp.down_proj.weight"
-    hits = [n for n in ck.tensors if n.endswith(suffix) and "visual" not in n and "mtp" not in n]
-    if len(hits) != 1:
-        raise KeyError(f"expected one tensor ending in {suffix}, found {hits}")
-    return hits[0]
+    """The MLP tensor that writes at a layer: the dense one, or a shared expert in MoE models."""
+    found = {w.kind: n for n, w in writers(ck).items() if w.layer == layer}
+    for kind in ("mlp_down", "shared_down"):
+        if kind in found:
+            return found[kind]
+    raise KeyError(f"layer {layer} has no dense or shared MLP writer, found {sorted(found)}")
 
 
 def project_columns(bits: np.ndarray, dtype: str, u: np.ndarray, columns: np.ndarray, alpha: float) -> np.ndarray:

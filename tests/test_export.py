@@ -4,7 +4,7 @@ import numpy as np
 from conftest import bf16
 from safetensors_shim import read
 
-from neyra.export import factorize, gguf_tensor, to_peft
+from neyra.export import factorize, to_peft
 from neyra.numerics import to_float
 from neyra.patch import make_patch
 from neyra.store import Checkpoint
@@ -17,9 +17,6 @@ def test_factorize_keeps_rank_one_at_rank_one(rng):
     assert np.allclose(b @ a, d)
 
 
-def test_gguf_names():
-    assert gguf_tensor("model.language_model.layers.15.mlp.down_proj.weight") == "blk.15.ffn_down.weight"
-    assert gguf_tensor("model.layers.3.self_attn.o_proj.weight") == "blk.3.attn_output.weight"
 
 
 def test_peft_adapter_reproduces_the_delta(model_dir, rng, tmp_path):

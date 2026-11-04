@@ -24,7 +24,7 @@ MAX_HEADER = 100 * 1024 * 1024
 CHUNK = 16 * 1024 * 1024
 
 ITEMSIZE = {
-    "BOOL": 1, "U8": 1, "I8": 1, "F8_E4M3": 1, "F8_E5M2": 1,
+    "BOOL": 1, "U8": 1, "I8": 1, "F8_E4M3": 1, "F8_E5M2": 1, "F8_E8M0": 1,
     "U16": 2, "I16": 2, "F16": 2, "BF16": 2,
     "U32": 4, "I32": 4, "F32": 4,
     "U64": 8, "I64": 8, "F64": 8,
@@ -177,6 +177,12 @@ def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
     return refs, meta
 
 
+def canonical_shards(files: list[str]) -> list[str]:
+    """The Hugging Face weights of a repo, skipping second copies such as original/ or consolidated."""
+    top = [f for f in files if f.endswith(".safetensors") and "/" not in f]
+    return [f for f in top if not f.startswith("consolidated")] or top
+
+
 class Checkpoint:
     """Every tensor in a local directory, a single file, or a Hub repo at a revision."""
 
@@ -211,7 +217,8 @@ class Checkpoint:
     @classmethod
     def _local(cls, path: Path) -> Checkpoint:
         root = path if path.is_dir() else path.parent
-        shards = sorted(path.glob("*.safetensors")) if path.is_dir() else [path]
+        shards = ([root / f for f in canonical_shards([p.name for p in path.glob("*.safetensors")])]
+                  if path.is_dir() else [path])
         if not shards:
             raise FormatError(f"{path}: no safetensors files")
         tensors = {}
@@ -233,7 +240,7 @@ class Checkpoint:
             info = json.load(r)
         sha = info["sha"]
         files = sorted(s["rfilename"] for s in info["siblings"])
-        shards = [f for f in files if f.endswith(".safetensors")]
+        shards = canonical_shards(files)
         if not shards:
             raise FormatError(f"{spec}: no safetensors files in this repo")
 
