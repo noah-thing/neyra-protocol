@@ -233,9 +233,8 @@ class Checkpoint:
         if not shards:
             raise FormatError(f"{path}: no safetensors files")
         tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)
-        files = sorted(
-            str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and ".cache" not in p.parts
-        )
+        names = (p.relative_to(root) for p in root.rglob("*") if p.is_file())
+        files = sorted(str(n) for n in names if ".cache" not in n.parts)
         return cls(str(path), tensors, files, lambda f: (root / f).read_bytes())
 
     @classmethod

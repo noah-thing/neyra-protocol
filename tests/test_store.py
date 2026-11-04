@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from conftest import bf16
 
+from neyra.patch import write_safetensors
 from neyra.store import Checkpoint, FormatError, LocalBlob, parse_header
 
 
@@ -43,3 +44,11 @@ def test_rejects_huge_header(tmp_path):
     p.write_bytes(struct.pack("<Q", 2**60) + b"{}")
     with pytest.raises(FormatError):
         parse_header(LocalBlob(p))
+
+
+def test_files_are_seen_inside_a_cache_directory(tmp_path):
+    root = tmp_path / ".cache" / "hub" / "model"
+    root.mkdir(parents=True)
+    write_safetensors(root / "model.safetensors", {"w": bf16(np.zeros(4))}, None, "BF16")
+    (root / "config.json").write_text("{}")
+    assert Checkpoint.open(str(root)).text("config.json") == "{}"
