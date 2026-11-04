@@ -58,8 +58,8 @@ for e in astra.edits:
     u = s.direction
     mask = np.zeros(w.shape[1])
     mask[s.support] = 1
-    info[e.name] = dict(base=base, edited=edited, dtype=e.dtype, w=w, u=u, c1=c1, c0=c0,
-                        support=s.support, astra_row=s.alpha * mask * (u @ w), alpha=s.alpha)
+    info[e.name] = {"base": base, "edited": edited, "dtype": e.dtype, "w": w, "u": u, "c1": c1, "c0": c0,
+                        "support": s.support, "astra_row": s.alpha * mask * (u @ w), "alpha": s.alpha}
 print("moments ready", flush=True)
 
 

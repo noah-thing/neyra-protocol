@@ -33,7 +33,7 @@ rng = random.Random(a.seed)
 used = random.Random(1234)
 items = []
 for name in ("gsm8k_train", "math_train"):
-    rows = [json.loads(x) for x in open(f"{a.practice}/{name}.jsonl")]
+    rows = [json.loads(x) for x in Path(f"{a.practice}/{name}.jsonl").read_text().splitlines()]
     taken = {r["id"] for r in used.sample(rows, a.skip)}
     items += rng.sample([r for r in rows if r["id"] not in taken], a.per_source)
 

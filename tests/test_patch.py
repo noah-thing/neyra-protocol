@@ -23,7 +23,7 @@ def pair(model_dir, rng, dense=False):
 
 @pytest.mark.parametrize("dense", [False, True])
 def test_round_trip_is_bit_exact(tmp_path, model_dir, rng, dense):
-    a, b, w, edited = pair(model_dir, rng, dense)
+    a, b, _w, edited = pair(model_dir, rng, dense)
     p = make_patch(a, b)
     assert [e.name for e in p.edits] == ["w"]
     assert p.edits[0].low_rank == dense
@@ -49,7 +49,7 @@ def test_refuses_the_wrong_base(model_dir, rng):
 
 
 def test_invert_restores_base(model_dir, rng):
-    a, b, w, edited = pair(model_dir, rng, dense=True)
+    a, b, w, _edited = pair(model_dir, rng, dense=True)
     p = make_patch(a, b)
     assert np.array_equal(p.invert(a).apply(b)["w"], w)
 

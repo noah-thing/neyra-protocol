@@ -54,8 +54,9 @@ class TorchRuntime:
         return list(ids)
 
     @torch.no_grad()
-    def generate(self, prompts: list[list[int]], max_tokens: int, sampling: Sampling = Sampling(),
+    def generate(self, prompts: list[list[int]], max_tokens: int, sampling: Sampling | None = None,
                  batch: int = 16) -> list[Rollout]:
+        sampling = sampling or Sampling()
         torch.manual_seed(sampling.seed)
         pad = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
         rows = []

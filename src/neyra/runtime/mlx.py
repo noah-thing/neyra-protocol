@@ -48,8 +48,9 @@ class MlxRuntime:
             enable_thinking=thinking)
         return list(ids["input_ids"] if isinstance(ids, dict) else ids)
 
-    def generate(self, prompts: list[list[int]], max_tokens: int, sampling: Sampling = Sampling(),
+    def generate(self, prompts: list[list[int]], max_tokens: int, sampling: Sampling | None = None,
                  batch: int = 32) -> list[Rollout]:
+        sampling = sampling or Sampling()
         gen = sys.modules["mlx_lm.generate"]
         mx.random.seed(sampling.seed)
         processors = None

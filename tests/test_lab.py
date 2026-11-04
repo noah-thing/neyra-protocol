@@ -79,7 +79,7 @@ def test_only_one_submission(tmp_path, model_dir, rng):
 
 
 def test_refuses_protected_tensors_and_scaling(tmp_path, model_dir, rng):
-    lab, w, u = setup(tmp_path, model_dir, rng)
+    lab, w, _u = setup(tmp_path, model_dir, rng)
     emb = lab.ck.tensors["model.embed_tokens.weight"].read()
     changed = emb.copy()
     changed[0, 0] += 3
