@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var (
@@ -53,6 +52,8 @@ var claimMembers = []string{"base_root", "result_root", "patch_id", "task", "eva
 
 var unsignedOf = map[uint64]string{1: "U8", 2: "U16", 4: "U32", 8: "U64"}
 
+var timeRE = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`)
+
 var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 func isDigest(v any) bool { s, ok := v.(string); return ok && digestRE.MatchString(s) }
@@ -84,6 +85,11 @@ func manifestShape(m map[string]any) (ents, req []any, err error) {
 			if !isDigest(em[k]) {
 				return nil, nil, bad
 			}
+		}
+	}
+	for i := 1; i < len(ents); i++ {
+		if !utf16Less(str(ents[i-1].(map[string]any)["name"]), str(ents[i].(map[string]any)["name"])) {
+			return nil, nil, bad
 		}
 	}
 	return ents, req, nil
@@ -160,6 +166,9 @@ func verifyPatch(file, baseDir string) error {
 		}
 		edits[i] = ed
 	}
+	if len(st.tensors) != 2*len(ents) {
+		return Code("bad_manifest")
+	}
 	if digestBad {
 		return Code("payload_mismatch")
 	}
@@ -220,10 +229,13 @@ func verifyLedger(file string) (string, error) {
 		return "", err
 	}
 	bad := Code("bad_chain")
-	if len(b) == 0 || b[len(b)-1] != '\n' {
+	prev := "sha256:" + strings.Repeat("0", 64)
+	if len(b) == 0 {
+		return prev, nil
+	}
+	if b[len(b)-1] != '\n' {
 		return "", bad
 	}
-	prev := "sha256:" + strings.Repeat("0", 64)
 	for seq, line := range bytes.Split(b[:len(b)-1], []byte("\n")) {
 		v, err := parseJSON(line)
 		e, ok := v.(map[string]any)
@@ -236,7 +248,7 @@ func verifyLedger(file string) (string, error) {
 		if !isBody || !isKind || !isTime || e["seq"] != int64(seq) || e["prev"] != prev {
 			return "", bad
 		}
-		if _, err := time.Parse("2006-01-02T15:04:05Z", t); err != nil {
+		if !timeRE.MatchString(t) {
 			return "", bad
 		}
 		prev = digest("ledger", line)
@@ -263,7 +275,7 @@ func verifyReceipt(file string, pub []byte) error {
 	if pt != "application/vnd.in-toto+json" {
 		return Code("bad_type")
 	}
-	payload, err := base64.StdEncoding.DecodeString(pl)
+	payload, err := strictB64(pl)
 	if err != nil {
 		return Code("bad_json")
 	}
@@ -288,10 +300,13 @@ func verifyReceipt(file string, pub []byte) error {
 			return Code("bad_claim")
 		}
 	}
-	for _, k := range []string{"ledger_head", "ledger_len", "digest_algorithm"} {
+	for _, k := range []string{"ledger_head", "ledger_len"} {
 		if _, ok := pred[k]; !ok {
 			return Code("bad_claim")
 		}
+	}
+	if pred["digest_algorithm"] != "neyra/weights/v1" {
+		return Code("bad_claim")
 	}
 	// The spec lists the subjects in a fixed order but accepts either.
 	want := map[string]string{"result-weights": str(claim["result_root"]), "patch": str(claim["patch_id"])}
@@ -318,7 +333,7 @@ func verifyReceipt(file string, pub []byte) error {
 	keyid := digest("key", pub)
 	for _, sg := range sigs {
 		m, _ := sg.(map[string]any)
-		sig, err := base64.StdEncoding.DecodeString(str(m["sig"]))
+		sig, err := strictB64(str(m["sig"]))
 		if m["keyid"] == keyid && err == nil && len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, pae, sig) {
 			return nil
 		}
@@ -327,3 +342,11 @@ func verifyReceipt(file string, pub []byte) error {
 }
 
 func unhex(s string) []byte { b, _ := hex.DecodeString(s); return b }
+
+// strictB64 is padded standard base64 with no whitespace; Go's decoder skips CR and LF.
+func strictB64(s string) ([]byte, error) {
+	if strings.ContainsAny(s, "\r\n") {
+		return nil, Code("bad_json")
+	}
+	return base64.StdEncoding.Strict().DecodeString(s)
+}

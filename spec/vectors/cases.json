@@ -810,5 +810,92 @@
   "expect": {
    "code": "ok"
   }
+ },
+ {
+  "kind": "binding",
+  "id": "complete",
+  "receipt": "fixtures/receipt-signed.json",
+  "ledger": "fixtures/ledger-good.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-head-mid-ledger",
+  "file": "fixtures/receipt-head-mid-ledger.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "head-mid-ledger-is-fine",
+  "receipt": "fixtures/receipt-head-mid-ledger.json",
+  "ledger": "fixtures/ledger-good.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-wrong-length",
+  "file": "fixtures/receipt-wrong-length.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "wrong-ledger-len",
+  "receipt": "fixtures/receipt-wrong-length.json",
+  "ledger": "fixtures/ledger-good.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-unknown-head",
+  "file": "fixtures/receipt-unknown-head.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "head-not-in-ledger",
+  "receipt": "fixtures/receipt-unknown-head.json",
+  "ledger": "fixtures/ledger-good.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "different-patch",
+  "receipt": "fixtures/receipt-signed.json",
+  "ledger": "fixtures/ledger-good.jsonl",
+  "patch": "fixtures/other-patch.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "ledger-fails-alone",
+  "receipt": "fixtures/receipt-signed.json",
+  "ledger": "fixtures/ledger-edited.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "bad_chain"
+  }
  }
 ]

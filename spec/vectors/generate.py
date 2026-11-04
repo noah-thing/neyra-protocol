@@ -246,6 +246,26 @@ receipt("receipt-bad-sig-base64.json", {**signed, "signatures": [{**signed["sign
 two = envelope(statement, other_secret)["signatures"] + signed["signatures"]
 receipt("receipt-two-signatures.json", {**signed, "signatures": two}, "ok", pub)
 
+
+
+def binding(id, expect, receipt_file="fixtures/receipt-signed.json", ledger_file="fixtures/ledger-good.jsonl",
+            patch_file="fixtures/good.neyra"):
+    case("binding", id, {"code": expect}, receipt=receipt_file, ledger=ledger_file, patch=patch_file)
+
+
+binding("complete", "ok")
+head2 = entry_digest(entries[1])
+receipt("receipt-head-mid-ledger.json", envelope(statement_for(claim, good.id, head2, 2), secret), "ok", pub)
+binding("head-mid-ledger-is-fine", "ok", "fixtures/receipt-head-mid-ledger.json")
+receipt("receipt-wrong-length.json", envelope(statement_for(claim, good.id, head, 2), secret), "ok", pub)
+binding("wrong-ledger-len", "binding_mismatch", "fixtures/receipt-wrong-length.json")
+receipt("receipt-unknown-head.json", envelope(statement_for(claim, good.id, "sha256:" + "4" * 64, 3), secret), "ok", pub)
+binding("head-not-in-ledger", "binding_mismatch", "fixtures/receipt-unknown-head.json")
+other_patch = Patch([diff_tensor("w", "BF16", a, a ^ np.uint16(1))]).bind(tensor_table(ck))
+other_patch.save(FIX / "other-patch.neyra")
+binding("different-patch", "binding_mismatch", patch_file="fixtures/other-patch.neyra")
+binding("ledger-fails-alone", "bad_chain", ledger_file="fixtures/ledger-edited.jsonl")
+
 for c_ in cases:
     if c_["expect"] is None or (c_["kind"] == "ledger" and c_["expect"] is None) or c_["kind"] == "ledger" and c_["expect"] == {"code": "ok"}:
         c_["expect"] = _run(ROOT, c_)

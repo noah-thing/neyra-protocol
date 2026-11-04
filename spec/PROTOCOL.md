@@ -200,15 +200,22 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
 An envelope with no signatures is an unauthenticated record, and tools MUST say so. A public key
 that is not 32 bytes is a usage error, outside this protocol.
 
-Binding a receipt to its files is a separate step: the patch's id and result root MUST equal the
-claim's, `ledger_head` MUST be the digest of an entry in the ledger, and `ledger_len` MUST equal that
-entry's `seq` plus one. Revealing the salt and items lets anyone check `holdout_commit`.
+### Binding a receipt to its evidence
+
+Given a receipt, its ledger and its patch, each of which must first verify alone, a verifier MUST check
+in this order and report `binding_mismatch` on the first failure:
+
+1. The patch id and the patch's `result_root` MUST equal those in the claim.
+2. `ledger_head` MUST be the digest of an entry in the ledger.
+3. `ledger_len` MUST equal that entry's `seq` plus one.
+
+Revealing the salt and items lets anyone check `holdout_commit`, which is outside conformance.
 
 ## 9. Error codes
 
 `ok`, `bad_safetensors`, `bad_json`, `not_canonical`, `bad_type`, `bad_manifest`, `unknown_member`,
 `unknown_extension`, `payload_mismatch`, `bad_index`, `base_mismatch`, `result_mismatch`, `bad_chain`,
-`bad_claim`, `subject_mismatch`, `bad_signature`.
+`bad_claim`, `subject_mismatch`, `bad_signature`, `binding_mismatch`.
 
 These are normative, so two implementations can be compared line by line.
 
@@ -231,6 +238,7 @@ An implementation counts as independent only if it is in another language and sh
 | `patch` | `file`, optional `base` directory | `{code}` |
 | `ledger` | `file` | `{code, head}` or `{code}` |
 | `receipt` | `file`, optional `public_hex` | `{code}` |
+| `binding` | `receipt`, `ledger`, `patch`, all files | `{code}` |
 
 Paths are relative to the vectors directory.
 

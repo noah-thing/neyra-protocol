@@ -88,10 +88,3 @@ class Ledger:
         self.head = entry_digest(entry)
         self.count += 1
         return self.head
-
-
-def head_in(path: Path, head: str) -> bool:
-    entries, _ = read_entries(path)
-    return any(entry_digest(e) == head for e in entries)
-
-

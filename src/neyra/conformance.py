@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .ledger import BrokenChain
+from .ledger import BrokenChain, entry_digest, read_entries
 from .ledger import verify as verify_ledger
 from .patch import (
     KNOWN_MEMBERS,
@@ -123,6 +123,28 @@ def check_receipt(path: str | Path, public: bytes | None = None) -> str:
     return "ok"
 
 
+def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) -> str:
+    code = check_receipt(receipt)
+    if code != "ok":
+        return code
+    code, _ = check_ledger(ledger)
+    if code != "ok":
+        return code
+    code = check_patch(patch)
+    if code != "ok":
+        return code
+    predicate = open_envelope(strict_loads(Path(receipt).read_text())).statement["predicate"]
+    claim = predicate["claim"]
+    p = Patch.load(patch)
+    if p.id != claim["patch_id"] or p.result_root != claim["result_root"]:
+        return "binding_mismatch"
+    entries, _ = read_entries(Path(ledger))
+    for e in entries:
+        if entry_digest(e) == predicate["ledger_head"]:
+            return "ok" if predicate["ledger_len"] == e["seq"] + 1 else "binding_mismatch"
+    return "binding_mismatch"
+
+
 def run_vectors(root: str | Path) -> list[tuple[str, str, str]]:
     """Every case in cases.json. Returns (id, expected, got) for failures."""
     root = Path(root)
@@ -164,4 +186,6 @@ def _run(root: Path, case: dict):
     if kind == "receipt":
         public = bytes.fromhex(case["public_hex"]) if case.get("public_hex") else None
         return {"code": check_receipt(root / case["file"], public)}
+    if kind == "binding":
+        return {"code": check_binding(root / case["receipt"], root / case["ledger"], root / case["patch"])}
     raise ValueError(f"unknown case kind {kind}")

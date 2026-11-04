@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 var itemSize = map[string]uint64{
@@ -151,13 +152,19 @@ func readSafetensors(b []byte) (*stFile, error) {
 
 // loadModel merges every shard in dir; sharding does not affect the result.
 func loadModel(dir string) (map[string]tensor, error) {
-	paths, _ := filepath.Glob(filepath.Join(dir, "*.safetensors"))
-	if len(paths) == 0 {
-		return nil, Code("bad_safetensors")
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
 	}
 	all := map[string]tensor{}
-	for _, p := range paths {
-		b, err := os.ReadFile(p)
+	files := 0
+	for _, de := range ents {
+		n := de.Name()
+		if !de.Type().IsRegular() || strings.HasPrefix(n, ".") || !strings.HasSuffix(n, ".safetensors") {
+			continue
+		}
+		files++
+		b, err := os.ReadFile(filepath.Join(dir, n))
 		if err != nil {
 			return nil, err
 		}
@@ -171,6 +178,9 @@ func loadModel(dir string) (map[string]tensor, error) {
 			}
 			all[k] = t
 		}
+	}
+	if files == 0 {
+		return nil, Code("bad_safetensors")
 	}
 	return all, nil
 }

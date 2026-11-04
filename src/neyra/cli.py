@@ -15,8 +15,9 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
+from .conformance import check_binding
 from .diff import Report, compare
-from .ledger import BrokenChain, head_in, read_entries
+from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
@@ -197,8 +198,6 @@ def cmd_verify(a) -> int:
     if a.ledger:
         try:
             head, count = verify_ledger(Path(a.ledger))
-            if not head_in(Path(a.ledger), predicate["ledger_head"]):
-                problems.append("receipt head is not in this ledger")
             text.append(f"ledger intact, {count} entries, head {head[7:23]}")
         except BrokenChain as e:
             problems.append(str(e))
@@ -208,6 +207,10 @@ def cmd_verify(a) -> int:
             problems.append("patch does not match the receipt")
         else:
             text.append(f"patch matches receipt, {got.id[7:23]}")
+    if a.ledger and a.patch and not problems:
+        code = check_binding(a.receipt, a.ledger, a.patch)
+        if code != "ok":
+            problems.append(code)
     text.append(f"verdict in receipt: {claim['verdict']}")
     text += [f"  {'pass' if ok else 'FAIL'}  {key}" for key, ok in claim["gates"].items()]
     text += [f"problem: {p}" for p in problems]
