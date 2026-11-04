@@ -173,6 +173,48 @@ def cmd_probe(a) -> int:
     return FINDINGS if exam.symptoms else OK
 
 
+def cmd_fix(a) -> int:
+    from .runtime import open_runtime
+    from .workflows import fix_loops
+
+    path = local_path(a.model)
+    found = fix_loops(open_runtime(path, a.backend), Checkpoint.open(path), a.n, a.max_tokens, a.columns)
+    if found is None:
+        emit(a, {"fixed": False}, "no patch written: not enough loops to work from")
+        return OK
+    found.patch.save(a.out)
+    layers = [x.index for x in found.plan.layers]
+    emit(a, {"fixed": True, "path": a.out, "patch_id": found.patch.id, "layers": layers, "alpha": found.plan.alpha,
+             "loops": found.loops},
+         f"layers {layers}, strength {found.plan.alpha}, {found.patch.entries:,} stored entries -> {a.out}\n"
+         "this is a candidate, not a result: measure it with a lab session before believing it")
+    return OK
+
+
+def cmd_bisect(a) -> int:
+    from .runtime import Sampling, open_runtime
+    from .workflows import bisect_loops, collect_loops
+
+    path = local_path(a.model)
+    ck = Checkpoint.open(path)
+    patch = Patch.load(a.patch)
+    patch.check_base(ck)
+    rt = open_runtime(path, a.backend)
+    tokens = collect_loops(rt, a.n, a.max_tokens, Sampling(0.6, 0.95, 20, 1.5, 0))
+    b = bisect_loops(rt, ck, patch, tokens, a.grain, a.retain)
+    b.patch.save(a.out)
+    r, c = b.result, b.check
+    kept, total = b.units.weights_changed(r.units), b.units.weights_changed(range(len(b.units)))
+    verdict = "confirmed" if c.passed else "NOT confirmed"
+    emit(a, {"kept_units": len(r.units), "total_units": r.total, "kept_weights": kept, "total_weights": total,
+             "minimal": r.minimal, "confirmed": c.passed, "confirmed_retained": c.retained, "confirm_items": c.n,
+             "path": a.out, "patch_id": b.patch.id},
+         f"{len(r.units)} of {r.total} units, {kept:,} of {total:,} weights -> {a.out}\n"
+         f"{verdict} on {c.n} unseen texts: keeps {c.retained:.0%} of the effect\n"
+         f"{'no single unit can be removed' if r.minimal else 'search budget ran out before this was minimal'}")
+    return OK if c.passed else FINDINGS
+
+
 def cmd_export(a) -> int:
     from .export import to_gguf_lora, to_peft
 
@@ -335,6 +377,24 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("model")
     p.add_argument("-n", type=int, default=32)
     p.add_argument("--max-tokens", type=int, default=8192)
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
+
+    p = command("fix", cmd_fix, "find a loop direction in a model and write a candidate patch")
+    p.add_argument("model")
+    p.add_argument("-o", "--out", default="fix.neyra")
+    p.add_argument("-n", type=int, default=48)
+    p.add_argument("--max-tokens", type=int, default=12288)
+    p.add_argument("--columns", type=int, default=64)
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
+
+    p = command("bisect", cmd_bisect, "find the smallest part of a patch that keeps its effect")
+    p.add_argument("model")
+    p.add_argument("patch")
+    p.add_argument("-o", "--out", default="bisected.neyra")
+    p.add_argument("-n", type=int, default=48)
+    p.add_argument("--max-tokens", type=int, default=12288)
+    p.add_argument("--grain", default="column", choices=["tensor", "column", "row"])
+    p.add_argument("--retain", type=float, default=0.9, help="share of the effect to keep")
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
     p = command("export", cmd_export, "write a patch as a LoRA for PEFT or llama.cpp")
