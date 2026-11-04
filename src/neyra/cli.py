@@ -16,6 +16,7 @@ import numpy as np
 
 from . import __version__
 from .check import DIFFERENT, EQUIVALENT, IDENTICAL, MISSING, NEVER_APPLIED, ROUNDING, check
+from .clock import check_claim, make_claim
 from .conformance import check_binding
 from .diff import Report, compare
 from .ledger import BrokenChain, read_entries
@@ -24,6 +25,17 @@ from .merge import merge
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
 from .protocol import ProtocolError, new_key, open_envelope, strict_loads
+from .rows import (
+    PROOF_TYPE,
+    Index,
+    build_index,
+    fetch,
+    link,
+    open_link,
+    parse_ranges,
+    prove,
+    verify_proof,
+)
 from .store import Checkpoint, FormatError
 
 SCHEMA = 1
@@ -287,9 +299,113 @@ def cmd_export(a) -> int:
     return OK
 
 
+def cmd_index(a) -> int:
+    ck = Checkpoint.open(a.model)
+    t = time.time()
+    index = build_index(ck)
+    index.save(a.out)
+    size = Path(a.out).stat().st_size
+    text = [f"{len(index.entries)} tensors, index {megabytes(size)} for {megabytes(ck.size)} of weights, "
+            + f"{time.time() - t:.0f}s", f"weights root {index.weights_root}", f"rows root    {index.rows_root}"]
+    if a.sign:
+        out = a.out + ".link.json"
+        Path(out).write_text(json.dumps(link(index, bytes.fromhex(Path(a.sign).read_text().strip())), indent=1))
+        text.append(f"link signed -> {out}\nthe signature says this key read all of the model, not that anyone else did")
+    emit(a, {"path": a.out, "weights_root": index.weights_root, "rows_root": index.rows_root, "bytes": size},
+         "\n".join(text))
+    return OK
+
+
+def cmd_prove(a) -> int:
+    ck = Checkpoint.open(a.model)
+    if a.index:
+        index = Index.load(a.index)
+    elif Path(a.model).expanduser().exists():
+        index = build_index(ck)
+    else:
+        raise Fail(USAGE, "a remote model needs --index, the leaf hashes someone published for it")
+    ref = ck.tensors.get(a.tensor)
+    if ref is None:
+        raise Fail(BAD_INPUT, f"{a.model} has no tensor {a.tensor}")
+    _, entry = index.entry(a.tensor)
+    if entry["dtype"] != ref.dtype or entry["shape"] != list(ref.shape):
+        raise Fail(BAD_INPUT, f"{a.tensor} is {ref.dtype}{list(ref.shape)} in the model but the index disagrees")
+    proof = prove(index, a.tensor, parse_ranges(a.rows))
+    verify_proof(proof, fetch(ref, proof))
+    Path(a.out).write_text(json.dumps(proof, indent=1))
+    size = Path(a.out).stat().st_size
+    emit(a, {"path": a.out, "rows_root": proof["rows_root"], "proof_bytes": size},
+         f"proof {size:,} bytes -> {a.out}\nrows root {proof['rows_root']}\n"
+         f"a proof binds rows to a rows root; verify it against a link to learn which weights that is")
+    return OK
+
+
+def verify_rows(a, proof: dict) -> int:
+    if not a.model:
+        raise Fail(USAGE, "checking a row proof needs the model to read the rows from")
+    ck = Checkpoint.open(a.model)
+    t = proof.get("tensor", {})
+    ref = ck.tensors.get(t.get("name"))
+    if ref is None or ref.dtype != t.get("dtype") or list(ref.shape) != t.get("shape"):
+        raise ProtocolError("proof_mismatch", f"{a.model} has no tensor like the one in the proof")
+    before = ck.bytes_read
+    blocks = verify_proof(proof, fetch(ref, proof))
+    read = ck.bytes_read - before
+    text = [f"{len(blocks)} ranges of {t['name']} hash into rows root {proof['rows_root'][7:23]}",
+            f"read {megabytes(read)} of {megabytes(ref.nbytes)}, proof {len(json.dumps(proof)):,} bytes"]
+    problems = []
+    if a.link:
+        public = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+        opened = open_link(strict_loads(Path(a.link).read_text()), public)
+        predicate = opened.statement["predicate"]
+        if predicate["rows_root"] != proof["rows_root"]:
+            problems.append("the link is for a different rows root")
+        else:
+            text.append(f"link ties it to weights root {predicate['weights_root'][7:23]}, "
+                        f"{'signature verified' if opened.signed else 'NOT signed: a record only'}")
+    else:
+        text.append("no link given, so nothing here says which weights this root belongs to")
+    text += [f"problem: {p}" for p in problems]
+    emit(a, {"rows_root": proof["rows_root"], "bytes_read": read, "problems": problems}, "\n".join(text))
+    return FAILED if problems else OK
+
+
+def open_indexed(spec: str, path: str | None) -> tuple[Checkpoint, Index]:
+    ck = Checkpoint.open(spec)
+    if path:
+        return ck, Index.load(path)
+    if not Path(spec).expanduser().exists():
+        raise Fail(USAGE, f"{spec} is remote, so it needs the row index someone published for it")
+    return ck, build_index(ck)
+
+
+def cmd_clock(a) -> int:
+    if a.check:
+        claim = strict_loads(Path(a.check).read_text())
+        problems = check_claim(claim, Checkpoint.open(a.a), Checkpoint.open(a.b))
+        text = [f"{claim['verdict']} on {claim['n']:,} entries of {claim['tensor']}, rows reproduced from the bytes"
+                if not problems else "claim does not hold"] + [f"problem: {p}" for p in problems]
+        emit(a, {"verdict": claim["verdict"], "problems": problems}, "\n".join(text))
+        return FAILED if problems else OK
+    if not a.rows:
+        raise Fail(USAGE, "name the dormant rows with --rows, such as 128010:128256")
+    (a_ck, a_index), (b_ck, b_index) = open_indexed(a.a, a.a_index), open_indexed(a.b, a.b_index)
+    claim = make_claim(a_ck, b_ck, a_index, b_index, a.tensor, a.rows)
+    Path(a.out).write_text(json.dumps(claim, indent=1))
+    scale = f", c in [{claim['c_lo_dec']}, {claim['c_hi_dec']}]" if "c_lo_dec" in claim else ""
+    emit(a, {"path": a.out, "verdict": claim["verdict"], "id": claim["id"]},
+         f"{claim['verdict']}{scale} on {claim['n']:,} entries -> {a.out}\n"
+         f"read {megabytes(a_ck.bytes_read + b_ck.bytes_read)}; bound to rows roots "
+         f"{claim['a_rows_root'][7:19]} and {claim['b_rows_root'][7:19]}")
+    return OK
+
+
 def cmd_verify(a) -> int:
     public = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
-    opened = open_envelope(strict_loads(Path(a.receipt).read_text()), public)
+    doc = strict_loads(Path(a.receipt).read_text())
+    if isinstance(doc, dict) and doc.get("type") == PROOF_TYPE:
+        return verify_rows(a, doc)
+    opened = open_envelope(doc, public)
     predicate = opened.statement["predicate"]
     claim = predicate["claim"]
     problems = []
@@ -473,11 +589,35 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--energy", type=float, default=0.999, help="share of the change to keep")
     p.add_argument("-o", "--out", required=True)
 
-    p = command("verify", cmd_verify, "check a receipt, and optionally its ledger, patch and signature")
-    p.add_argument("receipt")
+    p = command("index", cmd_index, "hash every row group of a model, so rows can be proved without the rest")
+    p.add_argument("model")
+    p.add_argument("-o", "--out", required=True)
+    p.add_argument("--sign", metavar="KEY", help="private key file; also write a signed link to the weights root")
+
+    p = command("prove", cmd_prove, "prove some rows of a tensor against a rows root")
+    p.add_argument("model")
+    p.add_argument("--tensor", required=True)
+    p.add_argument("--rows", required=True, metavar="A:B[,C:D]")
+    p.add_argument("--index", help="published row index; needed for a model that is not on disk")
+    p.add_argument("-o", "--out", default="rows.proof.json")
+
+    p = command("verify", cmd_verify, "check a receipt, or a row proof against the rows it claims")
+    p.add_argument("receipt", help="receipt, or a row proof from neyra prove")
+    p.add_argument("model", nargs="?", help="model to read the rows from, for a row proof")
+    p.add_argument("--link", help="signed link from neyra index --sign, for a row proof")
     p.add_argument("--ledger")
     p.add_argument("--patch")
     p.add_argument("--key", help="public key file")
+
+    p = command("clock", cmd_clock, "claim that two checkpoints share a scalar on rows training never fed")
+    p.add_argument("a")
+    p.add_argument("b")
+    p.add_argument("--rows", metavar="A:B[,C:D]", help="rows to compare, such as the reserved token ids")
+    p.add_argument("--tensor", help="default: the input embedding")
+    p.add_argument("--a-index")
+    p.add_argument("--b-index")
+    p.add_argument("--check", metavar="CLAIM", help="reproduce a claim from the bytes instead of making one")
+    p.add_argument("-o", "--out", default="clock.claim.json")
 
     p = command("keygen", cmd_keygen, "create an ed25519 key for signing receipts")
     p.add_argument("-o", "--out", default="neyra.key")

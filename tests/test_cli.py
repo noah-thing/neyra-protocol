@@ -92,3 +92,27 @@ def test_wrong_base_is_a_verification_failure(tmp_path, model_dir, rng, capsys):
     main(["patch", str(a), str(b), "-o", p])
     c = model_dir("c", {"w": bf16(rng.standard_normal((8, 8)))})
     assert main(["apply", str(c), p, "-o", str(tmp_path / "o")]) == 5
+
+
+def test_prove_and_verify_rows_end_to_end(tmp_path, model_dir, rng, capsys):
+    d = model_dir("m", {"w": bf16(rng.standard_normal((300, 64)))})
+    key = tmp_path / "k"
+    assert main(["keygen", "-o", str(key)]) == 0
+    assert main(["index", str(d), "-o", str(tmp_path / "m.rows"), "--sign", str(key)]) == 0
+    assert main(["prove", str(d), "--tensor", "w", "--rows", "10:12,200:201", "--index", str(tmp_path / "m.rows"),
+                 "-o", str(tmp_path / "p.json")]) == 0
+    link = str(tmp_path / "m.rows.link.json")
+    assert main(["verify", str(tmp_path / "p.json"), str(d), "--link", link, "--key", str(key.with_suffix(".pub"))]) == 0
+    out = capsys.readouterr().out
+    assert "signature verified" in out and "read 0.0 MB" in out
+
+
+def test_verify_rows_fails_on_a_different_model(tmp_path, model_dir, rng):
+    d = model_dir("m", {"w": bf16(rng.standard_normal((300, 64)))})
+    other = model_dir("o", {"w": bf16(rng.standard_normal((300, 64)))})
+    assert main(["prove", str(d), "--tensor", "w", "--rows", "3:4", "-o", str(tmp_path / "p.json")]) == 0
+    assert main(["verify", str(tmp_path / "p.json"), str(other)]) == 5
+
+
+def test_prove_needs_an_index_for_a_remote_model():
+    assert main(["prove", "someone/model", "--tensor", "w", "--rows", "0:1"]) in (2, 3, 4)

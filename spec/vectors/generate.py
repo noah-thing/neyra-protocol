@@ -1,6 +1,7 @@
 """Write the conformance vectors. Deterministic: rerunning gives identical files."""
 
 import base64
+import hashlib
 import json
 import shutil
 import struct
@@ -12,6 +13,7 @@ from neyra.conformance import _run
 from neyra.ledger import GENESIS, entry_digest
 from neyra.patch import Patch, diff_tensor, write_safetensors
 from neyra.protocol import digest, envelope, jcs, statement_for, tensor_table
+from neyra.rows import build_index, fetch, prove
 from neyra.store import Checkpoint
 
 ROOT = Path(__file__).parent
@@ -265,6 +267,65 @@ other_patch = Patch([diff_tensor("w", "BF16", a, a ^ np.uint16(1))]).bind(tensor
 other_patch.save(FIX / "other-patch.neyra")
 binding("different-patch", "binding_mismatch", patch_file="fixtures/other-patch.neyra")
 binding("ledger-fails-alone", "bad_chain", ledger_file="fixtures/ledger-edited.jsonl")
+
+for n in (0, 1, 2, 3, 4, 5, 7, 8, 9):
+    case("rowtree", f"leaves-{n}", leaves_hex=[hashlib.sha256(bytes([i])).hexdigest() for i in range(n)])
+
+shapes = model("rows-shapes", {
+    "grid": rng.integers(0, 65535, (70, 33), dtype=np.uint16), "tall": rng.integers(0, 65535, (3000, 2), dtype=np.uint16),
+    "vec": rng.integers(0, 65535, (5000,), dtype=np.uint16), "wide": rng.integers(0, 65535, (3, 2100), dtype=np.uint16),
+    "one": np.array(7, dtype=np.uint16), "void": np.zeros((3, 0), dtype=np.uint16), "bytes": c,
+})
+case("rowroot", "one-shard", model="fixtures/base")
+case("rowroot", "two-shards-same-root", model="fixtures/base-resharded")
+case("rowroot", "different", model="fixtures/other")
+case("rowroot", "awkward-shapes", model="fixtures/rows-shapes")
+case("rowroot", "same-tensor-in-two-files", {"code": "bad_safetensors"}, model="fixtures/duplicate-name")
+
+ROWS = FIX / "rows"
+ROWS.mkdir()
+shape_ck = Checkpoint.open(str(shapes))
+shape_index = build_index(shape_ck)
+
+
+def proof_case(id, ranges, name, change=None, data=None, expect="ok"):
+    proof = prove(shape_index, name, ranges)
+    body = fetch(shape_ck.tensors[name], proof)
+    if change:
+        change(proof)
+    body = body if data is None else data(body)
+    (ROWS / f"{id}.json").write_text(json.dumps(proof))
+    (ROWS / f"{id}.data").write_bytes(body)
+    case("rowproof", id, {"code": expect}, proof=f"fixtures/rows/{id}.json", data=f"fixtures/rows/{id}.data")
+
+
+def flip(body):
+    return bytes([body[0] ^ 1]) + body[1:]
+
+
+proof_case("two-leaves", [(60, 66)], "grid")
+proof_case("partial-last-leaf", [(69, 70)], "grid")
+proof_case("three-ranges", [(5, 6), (2000, 2001), (2999, 3000)], "tall")
+proof_case("vector-tail", [(4999, 5000)], "vec")
+proof_case("one-row-per-leaf", [(2, 3)], "wide")
+proof_case("scalar", [(0, 1)], "one")
+proof_case("bytes", [(1, 4)], "bytes")
+proof_case("flipped-bit", [(60, 66)], "grid", data=flip, expect="proof_mismatch")
+proof_case("short-data", [(60, 66)], "grid", data=lambda b: b[:-1], expect="bad_proof")
+proof_case("other-root", [(60, 66)], "grid", lambda p: p.update(rows_root="sha256:" + "1" * 64), expect="proof_mismatch")
+proof_case("sibling-changed", [(1000, 1030)], "tall", lambda p: p["tree"].__setitem__(0, "sha256:" + "2" * 64), expect="proof_mismatch")
+proof_case("path-changed", [(60, 66)], "grid", lambda p: p["path"].__setitem__(0, "sha256:" + "3" * 64), expect="proof_mismatch")
+proof_case("path-short", [(60, 66)], "grid", lambda p: p["path"].pop(), expect="bad_proof")
+proof_case("tree-long", [(1000, 1030)], "tall", lambda p: p["tree"].append(p["tree"][0]), expect="bad_proof")
+proof_case("other-name", [(60, 66)], "grid", lambda p: p["tensor"].update(name="tall"), expect="proof_mismatch")
+proof_case("other-dtype", [(60, 66)], "grid", lambda p: p["tensor"].update(dtype="F16"), expect="proof_mismatch")
+proof_case("other-position", [(60, 66)], "grid", lambda p: p.update(index=p["index"] ^ 1), expect="proof_mismatch")
+proof_case("range-past-end", [(60, 66)], "grid", lambda p: p.update(ranges=[[60, 71]]), expect="bad_proof")
+proof_case("ranges-unsorted", [(5, 6), (2000, 2001)], "tall", lambda p: p["ranges"].reverse(), expect="bad_proof")
+proof_case("unknown-member", [(60, 66)], "grid", lambda p: p.update(extra=1), expect="bad_proof")
+(ROWS / "not-json.json").write_text("{")
+(ROWS / "not-json.data").write_bytes(b"")
+case("rowproof", "not-json", {"code": "bad_proof"}, proof="fixtures/rows/not-json.json", data="fixtures/rows/not-json.data")
 
 for c_ in cases:
     if c_["expect"] is None or (c_["kind"] == "ledger" and c_["expect"] is None) or c_["kind"] == "ledger" and c_["expect"] == {"code": "ok"}:

@@ -897,5 +897,353 @@
   "expect": {
    "code": "bad_chain"
   }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-0",
+  "leaves_hex": [],
+  "expect": {
+   "root": "sha256:30d430dda3d555a48340574943f9e564caaf0390a91df29b092412e4cde6c401"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-1",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  ],
+  "expect": {
+   "root": "sha256:6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-2",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a"
+  ],
+  "expect": {
+   "root": "sha256:d757ede297536ca497094fe0b287d5f9fb15f71e9fd33f61ed3cd51afeb1c903"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-3",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986"
+  ],
+  "expect": {
+   "root": "sha256:6b7eab285dd0366bb3a916067cc81409cedd5aba0824c15817d83ca4276b4422"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-4",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+   "084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5"
+  ],
+  "expect": {
+   "root": "sha256:5eb86b8f86f33c87255fdd947114ac7e028bcca60462b7592ba6e529840acbe4"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-5",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+   "084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5",
+   "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71"
+  ],
+  "expect": {
+   "root": "sha256:b546cfce9777528aa86f54b9e3d485b86a21c9fb0d71207bb1da76a895ace39a"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-7",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+   "084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5",
+   "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+   "e77b9a9ae9e30b0dbdb6f510a264ef9de781501d7b6b92ae89eb059c5ab743db",
+   "67586e98fad27da0b9968bc039a1ef34c939b9b8e523a8bef89d478608c5ecf6"
+  ],
+  "expect": {
+   "root": "sha256:cbdd0690756e2fcba33052c5810e33bacd5a0886621a30c7688623915864adde"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-8",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+   "084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5",
+   "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+   "e77b9a9ae9e30b0dbdb6f510a264ef9de781501d7b6b92ae89eb059c5ab743db",
+   "67586e98fad27da0b9968bc039a1ef34c939b9b8e523a8bef89d478608c5ecf6",
+   "ca358758f6d27e6cf45272937977a748fd88391db679ceda7dc7bf1f005ee879"
+  ],
+  "expect": {
+   "root": "sha256:85df1699f8e3ee853ac3ac60722a8c36498d1da07349c0f5b137a67bb976d388"
+  }
+ },
+ {
+  "kind": "rowtree",
+  "id": "leaves-9",
+  "leaves_hex": [
+   "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+   "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+   "084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5",
+   "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+   "e77b9a9ae9e30b0dbdb6f510a264ef9de781501d7b6b92ae89eb059c5ab743db",
+   "67586e98fad27da0b9968bc039a1ef34c939b9b8e523a8bef89d478608c5ecf6",
+   "ca358758f6d27e6cf45272937977a748fd88391db679ceda7dc7bf1f005ee879",
+   "beead77994cf573341ec17b58bbf7eb34d2711c993c1d976b128b3188dc1829a"
+  ],
+  "expect": {
+   "root": "sha256:8a400828dd7d6ebe2904a8490d7d8e7f49460fe937b8f721f76aa1d572498c80"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "one-shard",
+  "model": "fixtures/base",
+  "expect": {
+   "root": "sha256:e6cb936092bcd4e98cb8841b2a4d0ac7954a3368db679f0a299764ac6ac46a20"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "two-shards-same-root",
+  "model": "fixtures/base-resharded",
+  "expect": {
+   "root": "sha256:e6cb936092bcd4e98cb8841b2a4d0ac7954a3368db679f0a299764ac6ac46a20"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "different",
+  "model": "fixtures/other",
+  "expect": {
+   "root": "sha256:07341d78ed637544a31dec842f9c62d9a4541503784f773c59680d6158a1e8f2"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "awkward-shapes",
+  "model": "fixtures/rows-shapes",
+  "expect": {
+   "root": "sha256:2f7565f6b9ecc678e72d3fa25e1b103ee61abb51b8ba09a0a094a065f59a7b78"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "same-tensor-in-two-files",
+  "model": "fixtures/duplicate-name",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "two-leaves",
+  "proof": "fixtures/rows/two-leaves.json",
+  "data": "fixtures/rows/two-leaves.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "partial-last-leaf",
+  "proof": "fixtures/rows/partial-last-leaf.json",
+  "data": "fixtures/rows/partial-last-leaf.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "three-ranges",
+  "proof": "fixtures/rows/three-ranges.json",
+  "data": "fixtures/rows/three-ranges.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "vector-tail",
+  "proof": "fixtures/rows/vector-tail.json",
+  "data": "fixtures/rows/vector-tail.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "one-row-per-leaf",
+  "proof": "fixtures/rows/one-row-per-leaf.json",
+  "data": "fixtures/rows/one-row-per-leaf.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "scalar",
+  "proof": "fixtures/rows/scalar.json",
+  "data": "fixtures/rows/scalar.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "bytes",
+  "proof": "fixtures/rows/bytes.json",
+  "data": "fixtures/rows/bytes.data",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "flipped-bit",
+  "proof": "fixtures/rows/flipped-bit.json",
+  "data": "fixtures/rows/flipped-bit.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "short-data",
+  "proof": "fixtures/rows/short-data.json",
+  "data": "fixtures/rows/short-data.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "other-root",
+  "proof": "fixtures/rows/other-root.json",
+  "data": "fixtures/rows/other-root.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "sibling-changed",
+  "proof": "fixtures/rows/sibling-changed.json",
+  "data": "fixtures/rows/sibling-changed.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "path-changed",
+  "proof": "fixtures/rows/path-changed.json",
+  "data": "fixtures/rows/path-changed.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "path-short",
+  "proof": "fixtures/rows/path-short.json",
+  "data": "fixtures/rows/path-short.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "tree-long",
+  "proof": "fixtures/rows/tree-long.json",
+  "data": "fixtures/rows/tree-long.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "other-name",
+  "proof": "fixtures/rows/other-name.json",
+  "data": "fixtures/rows/other-name.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "other-dtype",
+  "proof": "fixtures/rows/other-dtype.json",
+  "data": "fixtures/rows/other-dtype.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "other-position",
+  "proof": "fixtures/rows/other-position.json",
+  "data": "fixtures/rows/other-position.data",
+  "expect": {
+   "code": "proof_mismatch"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "range-past-end",
+  "proof": "fixtures/rows/range-past-end.json",
+  "data": "fixtures/rows/range-past-end.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "ranges-unsorted",
+  "proof": "fixtures/rows/ranges-unsorted.json",
+  "data": "fixtures/rows/ranges-unsorted.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "unknown-member",
+  "proof": "fixtures/rows/unknown-member.json",
+  "data": "fixtures/rows/unknown-member.data",
+  "expect": {
+   "code": "bad_proof"
+  }
+ },
+ {
+  "kind": "rowproof",
+  "id": "not-json",
+  "proof": "fixtures/rows/not-json.json",
+  "data": "fixtures/rows/not-json.data",
+  "expect": {
+   "code": "bad_proof"
+  }
  }
 ]

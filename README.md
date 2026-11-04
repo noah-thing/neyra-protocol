@@ -45,6 +45,8 @@ Both work on any machine with Python 3.10 or later, with no GPU. To run models, 
 | `neyra export` | Turn a patch into a LoRA for PEFT or stock llama.cpp |
 | `neyra probe` | Run a model through a fixed battery and report loops, runaway thinking and missing answers |
 | `neyra verify`, `log`, `keygen` | Check signed receipts and tamper evident ledgers |
+| `neyra index`, `prove` | Prove a few rows of a tensor against a rows root, reading only those rows |
+| `neyra clock` | Claim that two checkpoints share a scalar on rows training never fed, bound to their rows roots |
 | `neyra mcp` | Serve a measured lab to any agent |
 
 A patch is a safetensors file, so opening one cannot execute code. The published 0.8B edit is a 1.3 MB
@@ -121,10 +123,16 @@ depend on any of these.
 
 [`spec/PROTOCOL.md`](spec/PROTOCOL.md) defines the patch, claim, ledger and receipt formats, with RFC 8785
 canonical JSON, domain separated digests, and a weights root that covers every tensor and ignores how
-files are sharded. [`spec/vectors`](spec/vectors) holds 103 conformance cases.
+files are sharded. [`spec/vectors`](spec/vectors) holds 138 conformance cases.
 
 [`impl/go`](impl/go) is a second verifier in Go. It was written from the spec and vectors alone, with no
-access to the Python source, and it passes all 103. The problems it exposed in the spec were fixed.
+access to the Python source, and it passes the first 103. The problems it exposed in the spec were fixed. The 35
+row proof cases of Annex B were added later by the Python author, so they are not yet an independent check.
+
+Annex B adds a second root over the same tensors, so a few rows of a remote checkpoint can be checked with
+the rows and a proof of about a kilobyte. `neyra index` builds it, `neyra prove` and `neyra verify` use it.
+A proof binds rows to a rows root. Tying that root to the weights root needs someone who read the whole
+model to sign a link, and the annex says why nothing shorter can do it.
 
 ## Measured accuracy of `diff`
 

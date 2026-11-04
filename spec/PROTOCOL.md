@@ -40,7 +40,8 @@ in every array hashed below, including tensor digests.
 
     digest(domain, bytes) = "sha256:" + hex(SHA-256("neyra/" + domain + "/v1" + 0x00 + bytes))
 
-Domains in use: `payload`, `patch`, `weights`, `ledger`, `holdout`, `key`.
+Domains in use: `payload`, `patch`, `weights`, `ledger`, `holdout`, `key`, and, from Annex B, `rowleaf`,
+`rownode`, `rowtensor`.
 
 Tensor digest. `dtype` is the safetensors dtype name, `shape` the dimensions, and `raw` the tensor
 bytes exactly as stored, little endian:
@@ -216,7 +217,8 @@ Revealing the salt and items lets anyone check `holdout_commit`, which is outsid
 
 `ok`, `bad_safetensors`, `bad_json`, `not_canonical`, `bad_type`, `bad_manifest`, `unknown_member`,
 `unknown_extension`, `payload_mismatch`, `bad_index`, `base_mismatch`, `result_mismatch`, `bad_chain`,
-`bad_claim`, `subject_mismatch`, `bad_signature`, `binding_mismatch`.
+`bad_claim`, `subject_mismatch`, `bad_signature`, `binding_mismatch`, and from Annex B `bad_proof` and
+`proof_mismatch`.
 
 These are normative, so two implementations can be compared line by line.
 
@@ -240,6 +242,9 @@ An implementation counts as independent only if it is in another language and sh
 | `ledger` | `file` | `{code, head}` or `{code}` |
 | `receipt` | `file`, optional `public_hex` | `{code}` |
 | `binding` | `receipt`, `ledger`, `patch`, all files | `{code}` |
+| `rowtree` | `leaves_hex`, a list of 32 byte hashes | `{root}` |
+| `rowroot` | `model`, a directory | `{root}` or `{code}` |
+| `rowproof` | `proof` and `data`, files | `{code}` |
 
 Paths are relative to the vectors directory.
 
@@ -257,3 +262,87 @@ outer product in order k = 0 to r - 1, casts to float32, rounds to the tensor dt
 nearest even, then substitutes `idx` and `val`, which correct any remaining entries. Fused multiply
 add MUST NOT be used. Only BF16, F16 and F32 tensors may use it. Verifiers need not implement it, and
 one that does not MUST report `unknown_extension`. No conformance vector requires it.
+
+## Annex B: extension `rows/1`
+
+The weights root hashes each tensor whole, so a claim about a few rows of a tensor cannot be checked
+against it without reading all of that tensor. This annex defines a second root over the same tensors,
+built so that a few rows and a short proof are enough. It changes no digest above. A verifier that does
+not implement it loses nothing, and it needs no entry in `requires`. Conformance for it is the cases of
+kinds `rowtree`, `rowroot` and `rowproof`.
+
+### B.1 Tree
+
+Hashes are 32 raw bytes here, the bytes behind the `sha256:` form. `H(domain, bytes)` is the SHA-256
+construction of section 3 with the digest left as raw bytes.
+
+    leaf(b)     = H("rowleaf", b)
+    node(l, r)  = H("rownode", l + r)
+
+A tree over n hashes in order is, by RFC 6962: for n = 0, `H("rownode", "")`; for n = 1 the hash itself; for
+n above 1, `node(T(first k), T(rest))` with k the largest power of two below n. A tree is never padded or
+duplicated, so no two sequences share a root.
+
+### B.2 Rows and leaves
+
+A tensor of shape `[d0, d1, ...]` has `d0` rows, each `d1 * ... * itemsize` bytes, the product being 1 for
+`[d0]`. A tensor of shape `[]` has one row of `itemsize` bytes. Let `width` be the bytes in a row.
+
+If the tensor has no bytes it has no leaves. Otherwise a leaf holds `g = ceil(4096 / width)` consecutive
+rows, so every leaf but the last is at least 4096 bytes, and the last holds what is left. Leaf `k` is
+`leaf(raw bytes of rows k*g to min(rows, (k+1)*g))`. The tensor tree is the tree over its leaves. Leaves
+depend only on dtype and shape, so a verifier needs nothing else to find where a row sits.
+
+A tensor root is the tree root of its leaf hashes. The tensor's entry in the model tree is
+
+    entry = H("rowtensor", JCS({"name", "dtype", "shape", "tree": digest of the tensor root}))
+
+so the name, dtype and shape are part of what a proof proves. The rows root is the tree over the entries
+of all tensors, sorted by `name` in UTF-16 code unit order, written as a digest. It covers the same tensors
+as the weights root and ignores sharding in the same way.
+
+### B.3 Row proof
+
+A row proof is a JSON object with exactly these members: `type` set to `"neyra.rowproof/1"`;
+`rows_root`; `tensor`, an object with `name`, `dtype` and `shape`; `index` and `count`, the position of the
+tensor among the `count` tensors; `ranges`, a non empty list of `[start, end)` row pairs, each non empty,
+sorted and not overlapping, inside the tensor; `tree`, a list of digests; and `path`, a list of digests.
+
+The opened leaves are every leaf that holds a row of some range, in increasing order. The data is their
+bytes joined in that order. `tree` holds, left to right, the hash of each maximal subtree of the tensor
+tree that contains no opened leaf. `path` holds the same for the model tree and the single leaf `index`.
+
+A verifier, given a proof and the data, MUST report the first of these, in this order:
+
+1. The proof does not have the members and types above, a range is out of order or outside the tensor, the
+   tensor has no leaves, `index` is not below `count`, or a digest is malformed. `bad_proof`
+2. The data is not exactly the length of the opened leaves. `bad_proof`
+3. `tree` or `path` has fewer hashes than the walk consumes, or more. `bad_proof`
+4. Rebuilding the tensor root from the data and `tree`, then the root from the entry and `path`, does not
+   give `rows_root`. `proof_mismatch`
+
+A proof that is not JSON is `bad_proof`. Rows are those the ranges name, cut out of the data. A proof for one range in a
+tensor of a quarter million leaves holds at most about 46 hashes, 1.5 KB as raw hashes.
+
+### B.4 What a proof does and does not show
+
+A proof shows that rows belong to a tensor of a given name, dtype and shape in a model with a given rows
+root. It says nothing about the weights root. That tie cannot be made from the rows, because the weights
+root hashes each tensor whole and SHA-256 gives no way to show a part of a message to be a part of the
+hashed one. Someone who has read the whole model must make it.
+
+### B.5 Index and link
+
+An index is a safetensors file whose `__metadata__` holds `neyra.rows`, the JCS encoding of
+`{"type": "neyra.rows/1", "weights_root", "rows_root", "tensors"}`. `tensors` has, for each tensor in
+name order, `name`, `dtype`, `shape`, `digest` (the tensor digest of section 3) and `tree` (the tensor
+root). Tensor number `i` has the payload tensor `{i}`, U8 of shape `[leaves, 32]`, holding its leaf hashes.
+Anyone can rebuild both roots from an index, and check them against a model by hashing the model once.
+Publishing the index for a model one does not own is allowed, and worth exactly as much as the link.
+
+A link is a DSSE envelope as in section 8, signed in the same way, over an in-toto Statement v1 with
+`predicateType` `https://neyra.run/rows/v1`, subjects `weights` and `rows` in that order holding the two
+roots, and a predicate of `digest_algorithm` `"neyra/rows/v1"`, `weights_root`, `rows_root` and `tensors`.
+A signature on a link says that the signer read the whole model and found its two roots to be these. A
+verifier that trusts the key, or several independent keys, can then accept rows against the weights root.
+Links have no conformance cases in this version.

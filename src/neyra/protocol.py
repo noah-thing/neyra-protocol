@@ -219,7 +219,7 @@ class Opened:
     signed: bool
 
 
-def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
+def decode_envelope(doc: dict) -> tuple[dict, bytes]:
     if doc.get("payloadType") != PAYLOAD_TYPE:
         raise ProtocolError("bad_type", "not an in-toto payload")
     try:
@@ -229,6 +229,28 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
     statement = strict_loads(payload)
     if jcs(statement) != payload:
         raise ProtocolError("not_canonical", "payload is not in canonical form")
+    return statement, payload
+
+
+def check_signature(doc: dict, payload: bytes, public: bytes) -> None:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    wanted = digest("key", public)
+    key = Ed25519PublicKey.from_public_bytes(public)
+    for s in doc.get("signatures", []):
+        if s.get("keyid") != wanted:
+            continue
+        try:
+            key.verify(base64.b64decode(s["sig"], validate=True), pae(PAYLOAD_TYPE, payload))
+            return
+        except (InvalidSignature, ValueError) as e:
+            raise ProtocolError("bad_signature", "signature does not verify") from e
+    raise ProtocolError("bad_signature", "no signature from this key")
+
+
+def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
+    statement, payload = decode_envelope(doc)
     if statement.get("_type") != STATEMENT_TYPE or statement.get("predicateType") != PREDICATE_TYPE:
         raise ProtocolError("bad_type", "wrong statement or predicate type")
     predicate = statement.get("predicate")
@@ -250,21 +272,8 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
         raise ProtocolError("subject_mismatch", "patch subject does not match the claim")
     if public is None:
         return Opened(statement, False)
-
-    from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-    wanted = digest("key", public)
-    key = Ed25519PublicKey.from_public_bytes(public)
-    for s in doc.get("signatures", []):
-        if s.get("keyid") != wanted:
-            continue
-        try:
-            key.verify(base64.b64decode(s["sig"], validate=True), pae(PAYLOAD_TYPE, payload))
-            return Opened(statement, True)
-        except (InvalidSignature, ValueError) as e:
-            raise ProtocolError("bad_signature", "signature does not verify") from e
-    raise ProtocolError("bad_signature", "no signature from this key")
+    check_signature(doc, payload, public)
+    return Opened(statement, True)
 
 
 def new_key(path: str | Path) -> str:

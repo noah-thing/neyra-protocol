@@ -22,6 +22,7 @@ from .patch import (
     payload_digest,
 )
 from .protocol import ProtocolError, jcs, open_envelope, root_of, strict_loads, tensor_table
+from .rows import build_index, text, tree_root, verify_proof
 from .store import ITEMSIZE, Checkpoint, FormatError, LocalBlob, parse_header
 
 TENSOR_MEMBERS = {"name", "dtype", "shape", "base_digest", "result_digest", "idx_digest", "val_digest"}
@@ -145,6 +146,14 @@ def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) ->
     return "binding_mismatch"
 
 
+def check_rowproof(proof: str | Path, data: str | Path) -> str:
+    try:
+        verify_proof(strict_loads(Path(proof).read_bytes()), Path(data).read_bytes())
+    except ProtocolError as e:
+        return "bad_proof" if e.code == "bad_json" else e.code
+    return "ok"
+
+
 def run_vectors(root: str | Path) -> list[tuple[str, str, str]]:
     """Every case in cases.json. Returns (id, expected, got) for failures."""
     root = Path(root)
@@ -186,6 +195,16 @@ def _run(root: Path, case: dict):
     if kind == "receipt":
         public = bytes.fromhex(case["public_hex"]) if case.get("public_hex") else None
         return {"code": check_receipt(root / case["file"], public)}
+    if kind == "rowtree":
+        leaves = b"".join(bytes.fromhex(h) for h in case["leaves_hex"])
+        return {"root": text(tree_root(leaves))}
+    if kind == "rowroot":
+        try:
+            return {"root": build_index(Checkpoint.open(str(root / case["model"]))).rows_root}
+        except FormatError:
+            return {"code": "bad_safetensors"}
+    if kind == "rowproof":
+        return {"code": check_rowproof(root / case["proof"], root / case["data"])}
     if kind == "binding":
         return {"code": check_binding(root / case["receipt"], root / case["ledger"], root / case["patch"])}
     raise ValueError(f"unknown case kind {kind}")

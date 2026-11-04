@@ -24,6 +24,9 @@ type vector struct {
 	Receipt   string
 	Ledger    string
 	Patch     string
+	LeavesHex []string `json:"leaves_hex"`
+	Proof     string
+	Data      string
 	Expect    struct {
 		Code, Hex, Digest, Root, Head string
 	}
@@ -59,6 +62,20 @@ func run(dir string, v vector) (string, string) {
 	case "ledger":
 		head, err := verifyLedger(path(v.File))
 		return string(codeOf(err)), head
+	case "rowtree":
+		leaves := make([][]byte, len(v.LeavesHex))
+		for i, h := range v.LeavesHex {
+			leaves[i] = unhex(h)
+		}
+		return "", hexDigest(treeRoot(leaves))
+	case "rowroot":
+		ts, err := loadModel(path(v.Model))
+		if err != nil {
+			return string(codeOf(err)), ""
+		}
+		return "", rowsRoot(ts)
+	case "rowproof":
+		return string(codeOf(verifyRowProof(path(v.Proof), path(v.Data)))), ""
 	case "binding":
 		return string(codeOf(verifyBinding(path(v.Receipt), path(v.Ledger), path(v.Patch)))), ""
 	case "receipt":
