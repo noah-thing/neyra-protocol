@@ -66,14 +66,29 @@ class MlxRuntime:
             rows.append(Rollout(prompt, ids, text, len(ids) >= max_tokens))
         return rows
 
-    def logprobs(self, tokens: list[int], start: int = 1) -> np.ndarray:
-        """Log probability of each token from position start, teacher forced."""
-        x = mx.array(tokens)[None]
-        logits = self.model(x[:, :-1])[0, start - 1:].astype(mx.float32)
-        lp = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
-        out = mx.take_along_axis(lp, mx.array(tokens[start:])[:, None], axis=-1)[:, 0]
-        mx.eval(out)
-        return np.array(out)
+    def _head(self):
+        lm = getattr(self.model, "language_model", self.model)
+        if getattr(lm, "lm_head", None) is not None:
+            return lm.model, lm.lm_head
+        return lm.model, lm.model.embed_tokens.as_linear
+
+    def logprobs(self, tokens: list[int], start: int = 1, positions: np.ndarray | None = None) -> np.ndarray:
+        """Log probability of tokens, teacher forced: every one from start, or just positions.
+
+        With a large vocabulary the output head dominates, so it only runs where needed.
+        """
+        at = np.arange(start, len(tokens)) if positions is None else np.asarray(positions)
+        trunk, head = self._head()
+        hidden = trunk(mx.array(tokens)[None][:, :-1])[0]
+        out = []
+        for i in range(0, len(at), 256):
+            chunk = at[i:i + 256]
+            logits = head(hidden[mx.array(chunk - 1)]).astype(mx.float32)
+            lp = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
+            picked = mx.take_along_axis(lp, mx.array(np.asarray(tokens)[chunk])[:, None], axis=-1)[:, 0]
+            mx.eval(picked)
+            out.append(np.array(picked))
+        return np.concatenate(out)
 
     def next_token_logits(self, tokens: list[int]) -> np.ndarray:
         out = self.model(mx.array(tokens)[None])[0, -1].astype(mx.float32)

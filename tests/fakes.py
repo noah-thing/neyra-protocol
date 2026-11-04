@@ -51,8 +51,8 @@ class FakeRuntime:
     def next_token_logits(self, ids):
         return np.zeros(8)
 
-    def logprobs(self, tokens, start=1):
-        return np.zeros(len(tokens) - start)
+    def logprobs(self, tokens, start=1, positions=None):
+        return np.zeros(len(tokens) - start if positions is None else len(positions))
 
     def layers(self):
         return [object()]

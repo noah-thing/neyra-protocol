@@ -8,11 +8,9 @@ import json
 import time
 from pathlib import Path
 
-import numpy as np
-
 from lesion.bisect import bisect
 from lesion.interop import from_weight_space_logs
-from lesion.probe import SelectivityProbe, Span, repeated_mask
+from lesion.probe import SelectivityProbe, loop_spans
 from lesion.runtime.mlx import MlxRuntime
 from lesion.store import Checkpoint
 from lesion.units import UnitSet
@@ -33,18 +31,8 @@ units = UnitSet(from_weight_space_logs(a.edit_dir), ck, "column")
 print(len(units), "units", flush=True)
 
 rows = json.loads(Path(a.rollouts).read_text())
-spans = []
-for r in rows:
-    ids = rt.tokenizer.encode(r["text"], add_special_tokens=False)
-    mask = repeated_mask(ids, 0)
-    if mask.sum() < 64:
-        continue
-    onset = int(np.argmax(mask))
-    lo = max(0, onset - a.length // 2)
-    t = ids[lo:lo + a.length]
-    m = mask[lo:lo + a.length]
-    spans.append(Span(t, 1, m, ~m))
-spans = spans[:a.texts]
+ids = [rt.tokenizer.encode(r["text"], add_special_tokens=False) for r in rows]
+spans = loop_spans(ids, a.length, a.texts, minimum=64)
 print(len(spans), "texts,", sum(s.target.sum() for s in spans), "target tokens", flush=True)
 
 probe = SelectivityProbe(rt, spans)

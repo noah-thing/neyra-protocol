@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import __version__
 from .diff import Report, compare
@@ -94,6 +95,49 @@ def cmd_apply(a) -> int:
     return 0
 
 
+def cmd_export(a) -> int:
+    from .export import to_gguf_lora, to_peft
+
+    base = Checkpoint.open(a.base)
+    patch = Patch.load(a.patch)
+    if a.format == "peft":
+        info = to_peft(patch, base, a.out, a.energy)
+    else:
+        if not a.arch:
+            raise SystemExit("gguf export needs --arch, the architecture name in the base GGUF, such as qwen35")
+        info = to_gguf_lora(patch, base, a.out, a.arch, a.energy)
+    print(f"{info['bytes']:,} bytes -> {a.out}")
+    return 0
+
+
+def cmd_verify(a) -> int:
+    from .ledger import BrokenChain, verify
+
+    receipt = json.loads(Path(a.receipt).read_text())
+    problems = []
+    try:
+        head, count = verify(Path(a.ledger))
+        entries = [json.loads(x) for x in Path(a.ledger).read_text().splitlines()]
+        heads = {e["hash"] for e in entries}
+        if receipt["ledger_head"] not in heads:
+            problems.append("receipt head is not in this ledger")
+        print(f"ledger intact, {count} entries, head {head[:16]}")
+    except BrokenChain as e:
+        problems.append(f"ledger: {e}")
+    if a.patch:
+        got = Patch.load(a.patch).fingerprint
+        if got != receipt["fingerprint"]:
+            problems.append("patch fingerprint does not match the receipt")
+        else:
+            print(f"patch matches receipt, {got[:16]}")
+    print(f"verdict in receipt: {receipt['verdict']}")
+    for key, passed in receipt["gates"].items():
+        print(f"  {'pass' if passed else 'FAIL'}  {key}")
+    for p in problems:
+        print(f"problem: {p}")
+    return 1 if problems else 0
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="lesion", description=__doc__)
     ap.add_argument("--version", action="version", version=__version__)
@@ -118,6 +162,21 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("patch")
     p.add_argument("-o", "--out", required=True)
     p.set_defaults(fn=cmd_apply)
+
+    p = sub.add_parser("export", help="write a patch as a LoRA for PEFT or llama.cpp")
+    p.add_argument("base")
+    p.add_argument("patch")
+    p.add_argument("--format", choices=["peft", "gguf"], required=True)
+    p.add_argument("--arch", help="GGUF architecture name, for --format gguf")
+    p.add_argument("--energy", type=float, default=0.999, help="share of the change to keep")
+    p.add_argument("-o", "--out", required=True)
+    p.set_defaults(fn=cmd_export)
+
+    p = sub.add_parser("verify", help="check a lab receipt against its ledger and patch")
+    p.add_argument("receipt")
+    p.add_argument("ledger")
+    p.add_argument("--patch")
+    p.set_defaults(fn=cmd_verify)
     return ap
 
 

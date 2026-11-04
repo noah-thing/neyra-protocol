@@ -77,11 +77,13 @@ class TorchRuntime:
         return rows
 
     @torch.no_grad()
-    def logprobs(self, tokens: list[int], start: int = 1) -> np.ndarray:
+    def logprobs(self, tokens: list[int], start: int = 1, positions: np.ndarray | None = None) -> np.ndarray:
+        at = np.arange(start, len(tokens)) if positions is None else np.asarray(positions)
         x = torch.tensor([tokens], device=self.device)
-        logits = self.model(x[:, :-1]).logits[0, start - 1:].float()
-        lp = torch.log_softmax(logits, dim=-1)
-        return lp.gather(1, x[0, start:, None])[:, 0].cpu().numpy()
+        index = torch.as_tensor(at, device=self.device)
+        hidden = self.model.model(x[:, :-1]).last_hidden_state[0, index - 1]
+        lp = torch.log_softmax(self.model.lm_head(hidden).float(), dim=-1)
+        return lp.gather(1, x[0, index, None])[:, 0].cpu().numpy()
 
     @torch.no_grad()
     def next_token_logits(self, tokens: list[int]) -> np.ndarray:

@@ -28,7 +28,7 @@ from .bisect import Measure, bisect
 from .ledger import Ledger
 from .numerics import from_float, is_float, to_float
 from .patch import Patch, TensorEdit, bits_sha256, diff_tensor
-from .probe import SelectivityProbe, Span, repeated_mask
+from .probe import SelectivityProbe, Span, loop_spans
 from .recover import recover
 from .repair import Layer, Plan, Repair, down_proj_name, matched_random, project_columns
 from .runtime import Sampling
@@ -182,18 +182,11 @@ class Lab:
         self.ledger.append("sample", candidate=candidate, seed=seed, **{k: result[k] for k in ("n", "metric", "hit_limit")})
         return result
 
-    def _spans(self, rollouts: str, limit: int = 16, length: int = 1536) -> list[Span]:
-        spans = []
-        for r in self.rollouts[rollouts]:
-            mask = repeated_mask(r.tokens, 0)
-            if mask.sum() < 32:
-                continue
-            lo = max(0, int(np.argmax(mask)) - length // 2)
-            m = mask[lo:lo + length]
-            spans.append(Span(r.tokens[lo:lo + length], 1, m, ~m))
+    def _spans(self, rollouts: str, limit: int = 16) -> list[Span]:
+        spans = loop_spans([r.tokens for r in self.rollouts[rollouts]], limit=limit)
         if not spans:
             raise Refused("those rollouts contain no repeated spans")
-        return spans[:limit]
+        return spans
 
     def find_direction(self, rollouts: str, layers: list[int] | None = None, columns: int = 64) -> dict:
         """Difference of means between repeated and other tokens, plus the columns that write it."""
