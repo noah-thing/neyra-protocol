@@ -30,11 +30,11 @@
 
 Neyra is a terminal tool for changing local language models and measuring what the change did.
 
-**Tuning.** Neyra checks your training data before you start, trains a LoRA on an Apple Silicon Mac, and scores the result
-against the base model, a prompt with examples and your quantized files. It works with the trainer you already use.
+It checks your training data before you start, trains a LoRA on an Apple Silicon Mac, and scores the result against the
+base model, a prompt with examples and your quantized files. It works with the trainer you already use.
 
-**Editing.** Neyra writes a fact or removes a reasoning loop directly in the weights, with no training run. Each edit is a
-small patch tied to its base model, and you can revert it bit for bit.
+It can also write a fact or remove a reasoning loop directly in the weights, with no training run. Each edit is a small
+patch tied to its base model, and you can revert it bit for bit.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/verdict-dark.svg">

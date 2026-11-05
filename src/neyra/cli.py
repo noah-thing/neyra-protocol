@@ -1448,7 +1448,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--val", metavar="FILE", help="a validation jsonl, checked for rows that also appear in DATA")
     p.add_argument("--max-length", type=int, metavar="N", help="the trainer's sequence length (default: its own default)")
     p.add_argument("--mask-prompt", action=argparse.BooleanOptionalAction, default=None,
-                   help="whether the loss skips the prompt (default: what the trainer does out of the box)")
+                   help="whether the loss skips the prompt (default: what the trainer does by default)")
     p.add_argument("--show", type=int, default=0, metavar="N", help="print the first N rows with trained tokens marked")
 
     p = tune_sub.add_parser("verdict", help="after fine-tuning: did it work, and did you need it, on your own cases",

@@ -79,7 +79,7 @@ checks that before it finishes.
 - Float models only, and LoRA only (no DoRA or full tuning).
 - The loss after training is on the test rows; it says nothing about the questions you care about. Compare
   generations, and run `neyra tune verdict`.
-- One process, one machine. The memory limit is a guideline MLX follows, not a cap enforced by the system.
+- One process, one machine. The memory limit is a guideline MLX follows. The system does not enforce it.
 
 ## Learning rate
 

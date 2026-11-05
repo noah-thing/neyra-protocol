@@ -81,7 +81,7 @@ drop. A file that could not run counts against it: nothing was measured. Otherwi
   base tokenizer, so a GGUF whose vocabulary differs gives meaningless results; `neyra hop` and `tune lint --gguf` check that.
 - The general questions and the KL texts are small. They show large damage and cannot show its absence.
 - Backends differ by rounding. A quantized file run through llama.cpp is compared with torch on CPU in bf16, and a
-  small number of flips between them is noise, not loss.
+  small number of flips between them is noise.
 
 ## Checked on
 

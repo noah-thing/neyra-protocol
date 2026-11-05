@@ -65,7 +65,7 @@ How exact, and against what (see `tests/test_tune_agreement.py`):
 - **Unsloth 2026.11.2 / unsloth_zoo 2026.11.2**. The real `train_on_responses_only` mask function, run on the ids this
   tool builds, with the markers found from the chat template: equal. The tokenization step (BOS handling and the eos that
   TRL appends to text) is rebuilt from reading unsloth's source and was not run against unsloth, which needs a GPU. Chat
-  templates whose markers tokenize differently inside a conversation than alone are refused, not guessed.
+  templates whose markers tokenize differently inside a conversation than alone are refused.
 - **Axolotl 0.21.1**. The real `chat_template` strategy with its defaults: ids equal on all tokenizers tested, mask equal
   on all but Qwen3 (Axolotl leaves the empty thinking block out of the trained span) and Mistral v0.3. Treated as
   approximate because its turn locator and options are many. Text rows are refused.
@@ -107,6 +107,6 @@ Everything is counted from the ids and mask that were built. Where a trainer is 
 - It does not know the trainer's version or your config beyond the flags above. LoRA settings, packing, `eot_tokens`,
   custom collators and chat templates passed on the trainer's command line are not read.
 - Packing and multimodal rows are not modelled.
-- A base model that never learned its end token is a fact about the weights, not the files, and is not checked.
+- A base model that never learned its end token is a problem in the weights. Lint reads files, so it does not check that.
 - Near duplicates are found by word overlap, so paraphrases are not.
 - Speed: 100,000 chat rows of about 320 tokens take about 30 seconds on an Apple Silicon laptop.
