@@ -1,13 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
 
 - `neyra tune lint DATA MODEL` builds the token ids and loss mask a fine-tuning trainer would use (TRL, mlx-lm, Unsloth, Axolotl, LLaMA-Factory) and reports BOS and end token problems, prompt text in the loss, truncation, template mismatches, duplicates and leakage. Needs `neyra[tune]`.
 - `neyra hop` checks Q4_K, Q5_K and Q6_K tensors against the interval each stored code allows instead of an error ceiling. A value outside it refutes the candidate; `docs/source.md` has the limits. Exact decoding of these types is checked bit for bit against llama.cpp by `bench/cells_vs_llamacpp.py`.
 - Removed `neyra.kquant`, a numpy Q4_K quantizer that did not reproduce llama.cpp's bytes.
-
-## 0.2.2
-
 - `neyra edit` runs on torch, so Linux, Windows and CPU work as well as Apple Silicon. Benchmark numbers still come from MLX.
 - `neyra edit` scores live decoding as well as logits.
 - Tests run on Windows.

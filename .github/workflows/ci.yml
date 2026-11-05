@@ -23,6 +23,7 @@ jobs:
         run: uv pip install -e '.[dev,mlx]'
       - name: torch, to run the editing tests on the CPU backend (CPU wheels on Linux)
         if: matrix.python == '3.12'
+        shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then uv pip install torch --index-url https://download.pytorch.org/whl/cpu; fi
           uv pip install -e '.[dev,torch]'
