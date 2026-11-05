@@ -16,7 +16,7 @@ found by a short descent on the MLP output there. A closed-form solve then share
 layers. The solve is MEMIT's, with the keys already written added to the neutral text covariance it must not
 disturb. Over 400 sequential edits that kept 1.7 points of efficacy and 12 of exact match against plain MEMIT
 updates, with no better overall score. Which layers to use is measured, by
-causal tracing on the model's own facts, not assumed. The weights are solved and measured in the rounded
+causal tracing on the model's own facts. The weights are solved and measured in the rounded
 dtype the patch produces.
 
 The patch is an ordinary low-rank patch, so `apply`, `merge`, `bisect` and `export` take it, and applying the

@@ -5,12 +5,9 @@ down_proj at the subject's last token, and a value, the MLP output the model wou
 say the new object. Several layers share the change, each taking an equal part of what is still
 missing. Sequential editing follows AlphaEdit (Fang et al., 2025) and RLSEdit: later batches must
 not undo earlier ones, so the keys already written join the keys of neutral text as things the
-update has to leave alone. Value vectors are capped near the size they had in the unedited model,
-because without that cap values and weights feed each other and sequential editing collapses
-(Norm-Anchor Scaling, 2026).
+update has to leave alone. Value vectors are capped near the size they had in the unedited model.
 
-Every solve is in float64 and measured on the rounded weights the patch really produces, so the
-rounding of a small edit to bf16 is part of the loop instead of an unpleasant surprise afterwards.
+Solves run in float64 and everything is measured on the rounded weights the patch produces.
 """
 
 from __future__ import annotations

@@ -123,12 +123,11 @@ resharded model keeps its root.
 1 - 2^-8, three patches that each add 2^-8 give 1.0 in pairs and 1 + 2^-7 together.
 
 `neyra edit` solves in float64 and measures the rounded weights the patch produces. Its gates cover efficacy,
-neighbouring facts, drift on neutral text and fluency. The limits ship in the code, not in your run, and the receipt
-keeps a FAIL as well as a PASS.
+neighbouring facts, drift on neutral text and fluency. The limits are constants in `editeval.py`. A failed run still
+gets a receipt.
 
-Output separates what you can recompute from what was measured. Sampled reads report their coverage. `identity` calls
-a model derived against distances measured on unrelated sibling models. A signature tells you who signed, so a receipt
-also lists what you need to rerun the claim.
+Sampled reads report their coverage. `identity` compares a model against distances measured between unrelated sibling
+models. Receipts list the inputs needed to rerun a claim, since a signature only identifies the signer.
 
 `hop` takes artifacts in the order a fine-tune passed through them:
 

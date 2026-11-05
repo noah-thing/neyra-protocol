@@ -2,7 +2,7 @@
 
 Neyra builds on Heretic, gguf-neuron-explorer, Abliterlitics, the diffing toolkit, MEMIT and AlphaEdit,
 Steer2Edit, CHiPS, and the Weight-Space Programming logs, which made an exact check possible at all. The
-direction and column edits here are established methods, not new ones.
+direction and column edits here are established methods.
 
 `neyra edit` takes its update from ROME and MEMIT and its protection of earlier edits from AlphaEdit and
 RLSEdit. For merging, mergekit has far more methods; `neyra merge` is a unit weight delta sum whose point is that

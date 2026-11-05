@@ -24,7 +24,7 @@ cd impl/go && go run . vectors ../../spec/vectors
 ## Claims
 
 A result claimed in the documentation needs a script in `bench` or `experiments` that reproduces it. State its
-limits next to it. Failed results count.
+limits next to it. Report failed results too.
 
 ## Writing a verifier
 

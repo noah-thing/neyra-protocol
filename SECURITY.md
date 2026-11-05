@@ -21,7 +21,7 @@ are in scope:
 
 ## What does not
 
-- A signature on a receipt shows who made a claim, not that it is true. A receipt for a false claim from a
+- A signature on a receipt identifies who made a claim. It says nothing about whether the claim is true. A receipt for a false claim from a
   key you do not trust is working as designed.
 - An agent with shell access to the machine that runs `neyra mcp` can read the holdout from disk. The README
   says to run the server on another host for adversarial use.
