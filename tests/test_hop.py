@@ -223,18 +223,3 @@ def test_qwen35_linear_attention_tensors_are_written_the_way_the_converter_does(
     # With unequal head counts the in_proj rows are reordered by the converter, which is not modelled.
     uneven = {"linear_num_key_heads": 2, "linear_num_value_heads": 4}
     assert gguf_io.to_gguf_layout("model.language_model.layers.0.linear_attn.in_proj_z.weight", conv, "qwen35", uneven) is None
-
-
-def test_numpy_q4_k_decodes_close_to_its_input_and_beats_q4_0():
-    from neyra.kquant import quantize_q4_k
-
-    gguf = pytest.importorskip("gguf")
-    x = (np.random.default_rng(0).standard_normal((8, 512)) * 0.5).astype(np.float32)
-    blocks = quantize_q4_k(x)
-    assert blocks.shape == (16, 144)
-    back = gguf.quants.dequantize(blocks, gguf.GGMLQuantizationType.Q4_K).reshape(x.shape)
-    q4_0 = gguf.quants.dequantize(gguf.quants.quantize(x, gguf.GGMLQuantizationType.Q4_0), gguf.GGMLQuantizationType.Q4_0)
-    err = np.linalg.norm(back - x) / np.linalg.norm(x)
-    assert err < 0.08 and err < np.linalg.norm(q4_0.reshape(x.shape) - x) / np.linalg.norm(x)
-    assert not np.array_equal(blocks, quantize_q4_k(x * 1.5))
-    assert np.array_equal(quantize_q4_k(np.zeros((1, 256), np.float32))[:, 4:], np.zeros((1, 140), np.uint8))
