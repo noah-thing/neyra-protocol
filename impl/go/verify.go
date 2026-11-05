@@ -65,7 +65,6 @@ var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 func isDigest(v any) bool { s, ok := v.(string); return ok && digestRE.MatchString(s) }
 
-// manifestShape checks the types of required members once they are known to be present.
 func asStrings(l []any) []string {
 	out := make([]string, len(l))
 	for i, x := range l {
@@ -74,6 +73,7 @@ func asStrings(l []any) []string {
 	return out
 }
 
+// manifestShape checks the types of required members once they are known to be present.
 func manifestShape(m map[string]any) (ents, req []any, err error) {
 	bad := Code("bad_manifest")
 	ents, ok1 := m["tensors"].([]any)

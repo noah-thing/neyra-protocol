@@ -12,14 +12,14 @@ records as ROME and MEMIT ship them. Add `true` (the object the model gives toda
 spread and whether it stayed where it belongs.
 
 Each fact becomes a key, the input to the last MLP projection at the subject's final token, and a value,
-found by a short descent on the MLP output there. A closed form solve then shares the change over several
+found by a short descent on the MLP output there. A closed-form solve then shares the change over several
 layers. The solve is MEMIT's, with the keys already written added to the neutral text covariance it must not
 disturb. Over 400 sequential edits that kept 1.7 points of efficacy and 12 of exact match against plain MEMIT
 updates, with no better overall score. Which layers to use is measured, by
 causal tracing on the model's own facts, not assumed. The weights are solved and measured in the rounded
 dtype the patch produces.
 
-The patch is an ordinary low rank patch, so `apply`, `merge`, `bisect` and `export` take it, and applying the
+The patch is an ordinary low-rank patch, so `apply`, `merge`, `bisect` and `export` take it, and applying the
 inverse restores the base bit for bit. The receipt is signed and holds the requests, layers, settings and
 before and after measures. `neyra edit` exits 1 and prints FAIL when efficacy, specificity, damage on neutral
 text or fluency miss their limits, and when specificity was not measured at all. The limits are fixed before a

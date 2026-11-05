@@ -1,12 +1,12 @@
 # The protocol
 
 [`spec/PROTOCOL.md`](../spec/PROTOCOL.md) defines the patch, claim, ledger and receipt formats, with RFC 8785
-canonical JSON, domain separated digests, and a weights root that covers every tensor and ignores how
+canonical JSON, domain-separated digests, and a weights root that covers every tensor and ignores how
 files are sharded. [`spec/vectors`](../spec/vectors) holds 312 conformance cases.
 
 [`impl/go`](../impl/go) is a second verifier in Go. It was written from the spec and vectors alone, with no
 access to the Python source, and it passes the first 103. The problems it exposed in the spec were fixed. The row
-proof cases of Annex B, the cases from differential fuzzing, the low rank patches of Annex A, the P-256 signatures and
+proof cases of Annex B, the cases from differential fuzzing, the low-rank patches of Annex A, the P-256 signatures and
 the Annex C statements were added later by the Python author, with the Python source open, so the Go verifier passes
 all 312 cases but is independent only for the first 103. It does read the patches `neyra edit` writes.
 

@@ -28,7 +28,7 @@
 ---
 
 Neyra writes facts and behaviour changes into safetensors checkpoints. An edit is a patch: about 170 KB for one fact
-on Qwen3-0.6B, tied to the digest of its base, and reversible bit for bit. `neyra edit` uses a MEMIT style closed form
+on Qwen3-0.6B, tied to the digest of its base, and reversible bit for bit. `neyra edit` uses a MEMIT style closed-form
 solve across several MLP layers. `neyra fix` finds the direction behind a reasoning loop and writes a patch that
 projects it out of the columns that write it.
 
@@ -79,7 +79,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 
 | Command | |
 |---|---|
-| [`edit`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md) | Write facts as a low rank patch. Exits 1 if it misses its gates |
+| [`edit`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md) | Write facts as a low-rank patch. Exits 1 if it misses its gates |
 | `fix` | Find a loop direction and write a candidate patch |
 | `probe` | Run a fixed battery and report loops, runaway thinking and missing answers |
 | `patch`, `apply`, `show` | Write the difference between two checkpoints as a patch, rebuild from it, inspect it |
@@ -101,7 +101,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 | Command | |
 |---|---|
 | [`attest`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), `render`, `supersede`, `withdraw`, `status` | Sign a statement of a change for OpenSSF model signing and CycloneDX tools |
-| `verify`, `log`, `keygen` | Check receipts and hash chained ledgers |
+| `verify`, `log`, `keygen` | Check receipts and hash-chained ledgers |
 | [`index`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/protocol.md), `prove` | Prove rows of a tensor against a root by reading only those rows |
 | `conformance` | Run the test vectors against your install |
 
@@ -109,7 +109,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 
 | | |
 |---|---|
-| [`neyra mcp`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash chained ledger |
+| [`neyra mcp`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash-chained ledger |
 | [`action.yml`](https://github.com/noah-thing/neyra-protocol/blob/main/action.yml) | GitHub Action that fails a job when a merge does not match its adapter |
 | [`hf-neyra`](https://github.com/noah-thing/neyra-protocol/blob/main/extensions/hf-neyra) | `hf neyra diff` and `hf neyra check` |
 
@@ -144,7 +144,7 @@ also lists what you need to rerun the claim.
 | `edit`, Qwen3-0.6B, 200 unseen CounterFact cases | Efficacy 1.00, paraphrase 0.95, neighbours 0.70 (0.745 before) | [`bench/edit_counterfact.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/edit_counterfact.py) |
 | `diff`, planted edits, 50 trials each | 100% form recovery on 12 of 14 conditions, 0 false alarms in 250 noise trials | [`bench/forensics.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/forensics.py) |
 | `check`, real merges | PEFT 0.21.2 and mlx-lm 0.32.2 in fp32, bf16 and fp16, matched bit for bit | [`tests/test_check_real.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_check_real.py) |
-| `merge` | Matches brute force rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
+| `merge` | Matches brute-force rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
 | Python and Go verifiers | Agree on 312 vectors and on mutated inputs from a differential fuzzer | [`fuzz/differential.py`](https://github.com/noah-thing/neyra-protocol/blob/main/fuzz/differential.py) |
 
 So far these edits rewrite facts and remove loops. None has been shown to add ability. ROME led `edit` on the 20

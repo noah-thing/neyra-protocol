@@ -304,7 +304,7 @@ the canonical form is a new major version with a new domain string. Optional add
 
 ## Annex A: extension `low-rank/1`
 
-Dense low rank edits would be huge as index lists. With this extension a patch tensor may also have
+Dense low-rank edits would be huge as index lists. With this extension a patch tensor may also have
 `{i}.left` and `{i}.right`, F64 payloads, and manifest members `left_digest` and `right_digest`, digests of
 those payloads as in section 5. `neyra edit` writes patches of this kind, so a C1 verifier MUST implement
 the extension. Conformance for it is the cases of kind `patch` whose ids begin `lowrank`.
@@ -435,7 +435,7 @@ statement is an in-toto Statement v1 with `predicateType` `https://neyra.run/tra
 `subject` MUST hold exactly the following, in any order, and nothing else:
 
 - `{"name": "result-weights", "digest": {"neyra_weights_v1": hex of result.weights_root}}`. The digest key is not
-  `sha256`, because this value is a domain separated hash of tensor digests and is not the sha256 of any file.
+  `sha256`, because this value is a domain-separated hash of tensor digests and is not the sha256 of any file.
 - For each entry of `result.files`: `{"name": path, "digest": {"sha256": sha256}}`.
 - If `result.files` is not empty: `{"name": result.name, "digest": {"sha256": oms_root(result.files)}}`.
 

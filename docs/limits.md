@@ -11,6 +11,6 @@
   Gemma 4, are recognised, but direction edits on them are untested.
 - Everything here has been tested on small Qwen3.5 and Qwen3 models. Larger models are untested.
 - `neyra edit` needs MLX, edits dense MLP layers only, and its AlphaEdit style `--solver null` lost to the default in every run.
-- `neyra merge` of two edit patches is exact but returns a dense patch, since Annex A has no way to merge low rank factors.
+- `neyra merge` of two edit patches is exact but returns a dense patch, since Annex A has no way to merge low-rank factors.
 - The lab keeps honest agents honest. An agent with shell access to the same machine could read the
   holdout from disk, so adversarial use needs the server on another host.

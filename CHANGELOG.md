@@ -3,11 +3,11 @@
 ## Unreleased
 
 - `neyra import` reads Delta League, OpenWSP, weightspace, PEFT and ballast edits into Neyra patches, and `export` writes them back.
-- `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
+- `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per-tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
 
 ## 0.2.1
 
-- `neyra edit MODEL "The capital of [France] is" Rome` takes a single fact on the command line.
+- `neyra edit MODEL "The capital of [France] is" Rome` takes a single-fact on the command line.
 - First release on PyPI.
 
 ## 0.2.0, first release
@@ -24,7 +24,7 @@
 - `extensions/hf-neyra`: an `hf` CLI extension, `hf neyra ...`.
 
 ### Errors
-- Wrong input ends in a one line message and an exit code. Fixed tracebacks for: a directory given as a file,
+- Wrong input ends in a one-line message and an exit code. Fixed tracebacks for: a directory given as a file,
   a binary file given as JSON, row ranges that are not numbers, an edit file with no requests or the wrong
   shape, a public key file that is not a key, a claim file that is not a claim, an unwritable output path,
   an unreachable Hub, and a Hub repo that does not exist when `huggingface_hub` is installed.
