@@ -35,8 +35,11 @@ def canonical(value) -> bytes:
 
 
 def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
     with open(path, "rb") as f:
-        return hashlib.file_digest(f, "sha256").hexdigest()
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def content_hash(ck: Checkpoint, identity: str, overrides: dict[str, np.ndarray] | None = None) -> str:
