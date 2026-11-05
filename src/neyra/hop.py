@@ -344,8 +344,10 @@ def _merged_weights(c: Check, by_name: dict, edited: list[str], add) -> None:
     elif rounded:
         add("rounded_away", f"{len(rounded)} of {n} edited tensors equal the base because the change is below {dtype} rounding")
     if c.faint and not rounded:
+        # A few thin tensors are normal for a short tune. Most of the change gone is the merge losing the tune.
+        kept = [by_name[x].applied for x in edited if by_name[x].applied is not None]
         add("rounded_away", f"{dtype} rounding kept under half of the change in {len(c.faint)} of {n} edited tensors, "
-                            f"{min(t.applied for t in c.faint):.0%} at worst")
+                            f"{min(t.applied for t in c.faint):.0%} at worst", problem=float(np.mean(kept)) < 0.5)
     typed = ("BF16", "F16", "F32", "F64")
     stray = [t for t in by_name.values() if t.name not in c.edited and t.status == DIFFERENT and not t.detail.startswith(typed)]
     if wrong:

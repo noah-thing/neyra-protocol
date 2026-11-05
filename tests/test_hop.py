@@ -223,3 +223,12 @@ def test_qwen35_linear_attention_tensors_are_written_the_way_the_converter_does(
     # With unequal head counts the in_proj rows are reordered by the converter, which is not modelled.
     uneven = {"linear_num_key_heads": 2, "linear_num_value_heads": 4}
     assert gguf_io.to_gguf_layout("model.language_model.layers.0.linear_attn.in_proj_z.weight", conv, "qwen35", uneven) is None
+
+
+@pytest.mark.parametrize("strength, ok", [(4e-4, True), (1e-5, False)])
+def test_rounding_fails_a_merge_only_when_most_of_the_change_is_gone(tmp_path, strength, ok):
+    """A light adapter loses part of its change to bf16 on a correct merge, which `check` calls equivalent."""
+    w = cases.World(np.random.default_rng(3), strength=strength)
+    verdict = trace([str(p) for p in cases.standard(tmp_path, w)])
+    causes = [f["cause"] for h in document(verdict)["hops"] for f in h["findings"]]
+    assert verdict.ok is ok and "rounded_away" in causes
