@@ -16,8 +16,12 @@ from neyra.check import Adapter, peft, targets
 from neyra.patch import write_safetensors
 from neyra.store import Checkpoint
 from neyra.tune import cases as cases_mod
-from neyra.tune import damage, prompts, verdict
-from neyra.tune.engines import TorchEngine, open_backends
+from neyra.tune import damage, engines, prompts, verdict
+from neyra.tune.engines import Engine, open_backends
+
+
+def TorchEngine(*a, **k):
+    return Engine(*a, backend="torch", **k)
 from neyra.tune.prompts import Format
 
 
@@ -101,7 +105,7 @@ def test_a_model_that_equals_the_base_has_nothing_to_test(world):
 
 
 def test_verdict_end_to_end_on_the_tiny_model(world):
-    b = open_backends(world["base"], world["big"], [], 5)
+    b = open_backends(world["base"], world["big"], [], 5, backend="torch")
     fmt = Format(True)
     ps_cases = [cases_mod.Case(str(i), f"tides and bread {i}", "") for i in range(40)]
     ps = [prompts.render(fmt, c) for c in ps_cases]
@@ -121,3 +125,14 @@ def test_verdict_end_to_end_on_the_tiny_model(world):
     assert right.scores["tuned"] == [1.0] * 40 and right.verdict in ("worked", "prompt_enough", "cannot_tell")
     assert wrong.scores["base"] == [1.0] * 40 and wrong.verdict in ("worse_than_base", "did_not_work")
     assert not wrong.passed
+
+
+def test_torch_stays_the_default_when_it_is_installed(monkeypatch):
+    monkeypatch.setattr(engines.importlib.util, "find_spec", lambda name: object())
+    assert engines.pick_backend("auto") == "torch"
+    assert engines.pick_backend("mlx") == "mlx"
+
+
+def test_a_machine_without_torch_falls_through_to_the_runtime_choice(monkeypatch):
+    monkeypatch.setattr(engines.importlib.util, "find_spec", lambda name: None)
+    assert engines.pick_backend("auto") == "auto"

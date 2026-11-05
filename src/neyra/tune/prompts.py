@@ -60,5 +60,5 @@ def encode(tokenizer, p: Prompt) -> list[int]:
                                                  enable_thinking=False)
         except TypeError:
             text = tokenizer.apply_chat_template(p.messages, add_generation_prompt=True, tokenize=False)
-        return list(tokenizer(text, add_special_tokens=False)["input_ids"])
-    return list(tokenizer(p.text, add_special_tokens=True)["input_ids"])
+        return list(tokenizer.encode(text, add_special_tokens=False))
+    return list(tokenizer.encode(p.text, add_special_tokens=True))

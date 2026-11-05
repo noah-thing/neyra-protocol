@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- `tune verdict` runs on MLX, so a Mac no longer needs torch. `--backend` picks the engine, and the default stays torch when it is installed.
+- `tune train` and `tune verdict` record a manifest: command, input digests, model revision, chat template digest, seed and tool versions.
+
 ## 0.3.1
 
 - `neyra[mlx]` resolves on every supported Python and platform. It installs mlx-lm on macOS with Python 3.11 or later, which is what mlx-lm supports.

@@ -43,7 +43,7 @@ A sample verdict report:
 {
   "schema": 1,
   "kind": "verdict",
-  "neyra": "0.3.1",
+  "neyra": "0.3.2",
   "os": "macos",
   "backend": "torch",
   "family": "qwen",

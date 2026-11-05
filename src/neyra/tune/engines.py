@@ -1,12 +1,14 @@
 """Run prompts through the base, the tuned model and quantized files.
 
-The torch engine loads the base once and swaps the tuned tensors in place, so the two share one copy in memory.
+The engine loads the base once, with MLX or torch, and swaps the tuned tensors in place, so the two share one copy
+in memory.
 Quantized files go through llama-server, which has to be installed; when it is not, the files are skipped and
 the report says so.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -41,6 +43,7 @@ class Backends:
     notes: list[str] = field(default_factory=list)
     has_chat_template: bool = True
     close: Callable[[], None] = lambda: None
+    name: str = "torch"
 
 
 def quant_name(path: str) -> str:
@@ -127,14 +130,22 @@ class LlamaRun:
             srv.stop()
 
 
-class TorchEngine:
-    def __init__(self, base: str, tuned: str, max_tokens: int, batch: int = 8):
+def pick_backend(backend: str) -> str:
+    """Torch when it is installed: the published verdicts came from it. MLX covers a Mac without it."""
+    if backend == "auto" and importlib.util.find_spec("torch"):
+        return "torch"
+    return backend
+
+
+class Engine:
+    def __init__(self, base: str, tuned: str, max_tokens: int, batch: int = 8, backend: str = "auto"):
         from ..check import Adapter, peft, targets
         from ..hop import saved_modules
-        from ..runtime.torch import TorchRuntime
+        from ..runtime import open_runtime
         from ..store import Checkpoint
 
-        self.rt = TorchRuntime(base)
+        self.rt = open_runtime(base, pick_backend(backend))
+        self.name = "mlx" if type(self.rt).__name__.startswith("Mlx") else "torch"
         self.max_tokens, self.batch = max_tokens, batch
         self.tokenizer = self.rt.tokenizer
         self.state = "base"
@@ -194,7 +205,7 @@ class TorchEngine:
         """KL(base || tuned) per token on each text, in nats, averaged over its tokens."""
         from ..stats import kl_from_logits
 
-        rows = [list(self.tokenizer(t, add_special_tokens=True)["input_ids"]) for t in texts]
+        rows = [list(self.tokenizer.encode(t, add_special_tokens=True)) for t in texts]
         out = []
         for state in ("base", "tuned"):
             self._use(state)
@@ -210,10 +221,11 @@ class TorchEngine:
         self._use("base")
 
 
-def open_backends(base: str, tuned: str, ggufs: list[str], max_tokens: int, threads: int | None = None) -> Backends:
-    engine = TorchEngine(base, tuned, max_tokens)
+def open_backends(base: str, tuned: str, ggufs: list[str], max_tokens: int, threads: int | None = None,
+                  backend: str = "auto") -> Backends:
+    engine = Engine(base, tuned, max_tokens, backend=backend)
     b = Backends({"base": engine.generator("base"), "tuned": engine.generator("tuned")}, engine.kl,
-                 has_chat_template=bool(getattr(engine.tokenizer, "chat_template", None)))
+                 has_chat_template=bool(getattr(engine.tokenizer, "chat_template", None)), name=engine.name)
     if ggufs:
         binary = find_llama_server()
         if binary is None:

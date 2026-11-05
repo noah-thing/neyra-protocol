@@ -8,7 +8,7 @@ neyra tune verdict BASE ADAPTER cases.jsonl --examples train.jsonl --json --save
 ```
 
 Run it after a tune. It answers two questions on your own test cases: did the tune help, and could a prompt
-have done the same. Install the extra with `uv tool install 'neyra[torch,tune]'`. Quantized files need llama.cpp's
+have done the same. Install the extra with `uv tool install 'neyra[torch,tune]'`. On a Mac, `neyra[tune,mlx]` runs it without torch. `--backend` picks the engine, and the default is torch when it is installed. The MLX engine has run the banking77 case below end to end, with the tuned model at the same 98.5%, but it has not been compared with torch case by case, so treat small differences between the two as unexplained. Quantized files need llama.cpp's
 `llama-server` on the PATH (or in `NEYRA_LLAMA_SERVER`). Without it the files are listed as not run, the first line
 says so, and the exit code is 1.
 
@@ -34,6 +34,9 @@ you give `--stop`. All arms get the same format, the same stop rules and greedy 
 `TUNED` is a PEFT or mlx-lm adapter folder (merged into the base the way PEFT's `merge_and_unload` rounds, using the
 same code as `neyra check`) or a folder of merged weights. An adapter that also stores full tensors
 (`modules_to_save`) has to be merged first.
+
+`--save FILE` and `--json` include a manifest: the command, the digests of the cases, the examples and every quantized file,
+the base and tuned model records, the seed and the tool versions.
 
 ## What it compares
 

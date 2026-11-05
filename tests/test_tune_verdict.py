@@ -247,6 +247,8 @@ def test_cli_exit_codes_and_json(files, monkeypatch, capsys):
     assert cli.main(args) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["verdict"] == "worked" and doc["shots"] == 8
+    assert doc["manifest"]["cases"]["sha256"].startswith("sha256:") and doc["manifest"]["seed"] == 0
+    assert doc["manifest"]["base"] == {"name": "base"} and "neyra" in doc["manifest"]["environment"]
     state["b"] = backends(0.5, 0.5, 0.5)
     assert cli.main(args) == 1
     assert json.loads(capsys.readouterr().out)["verdict"] == "did_not_work"

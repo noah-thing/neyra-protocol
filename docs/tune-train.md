@@ -29,8 +29,12 @@ trains and fuses, and Neyra checks what came out.
 run/
   adapter/            adapters.safetensors and adapter_config.json, as mlx_lm loads them
   tune.neyra          the patch: the adapter's low-rank factors, bound to the base
-  run.json            settings, losses, time, memory, patch id
+  run.json            settings, losses, time, memory, patch id, and a manifest of what went in
 ```
+
+The manifest holds the command, the digests of your data files, the model's revision, config, tokenizer and chat template
+digests, the seed, and the versions of Neyra, Python, mlx-lm and the rest. The patch already binds the base weights by
+digest.
 
 Everything is built in a hidden folder next to `run` and moved into place at the end. Ctrl-C, an error or a failed
 check removes it, so `run` either holds a finished result or does not exist. An existing filled `run` is refused.

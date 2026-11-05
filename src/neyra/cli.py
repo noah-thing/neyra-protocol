@@ -399,13 +399,14 @@ def cmd_tune_verdict(a) -> int:
     except cases_mod.CaseError as e:
         raise Fail(BAD_INPUT, str(e)) from e
     try:
-        backends = open_backends(a.base, a.tuned, a.gguf, a.max_tokens, a.threads)
+        backends = open_backends(a.base, a.tuned, a.gguf, a.max_tokens, a.threads, a.backend)
     except EngineError as e:
         raise Fail(BAD_INPUT, str(e)) from e
     except ModuleNotFoundError as e:
         if (e.name or "").split(".")[0] not in ("transformers", "tokenizers", "jinja2", "torch"):
             raise
-        raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[torch,tune]'") from e
+        raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[tune,mlx]' on Apple "
+                                "Silicon or 'neyra[tune,torch]' elsewhere") from e
     try:
         if chat is None:
             chat = backends.has_chat_template
@@ -416,11 +417,13 @@ def cmd_tune_verdict(a) -> int:
         raise Fail(BAD_INPUT, str(e)) from e
     finally:
         backends.close()
+    r.backend = backends.name
     if len(usable) < len(pool):
         r.warnings.append(f"{len(pool) - len(usable)} examples were dropped because they are also test cases")
     if len(shots) < a.shots:
         r.warnings.append(f"only {len(shots)} examples were available, so the prompt has {len(shots)}")
     doc = verdict_report.document(r)
+    doc["manifest"] = verdict_report.manifest_for(a.base, a.tuned, a.cases, a.examples, a.gguf, a.seed)
     if a.save:
         Path(a.save).write_text(json.dumps({"schema": SCHEMA, **doc}, indent=2))
     emit(a, doc, verdict_report.render(r))
@@ -1460,6 +1463,8 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--examples", required=True, metavar="FILE",
                    help="a jsonl file the few-shot prompt takes its examples from, such as your training file")
     p.add_argument("--gguf", nargs="+", default=[], metavar="FILE", help="quantized files of the tuned model to test too")
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"],
+                   help="what runs the model (default: torch when it is installed, otherwise MLX)")
     p.add_argument("--scorer", default="exact", help="exact, contains, regex:PATTERN or python:FILE (default: exact)")
     p.add_argument("--shots", type=int, default=8, metavar="N", help="examples in the few-shot prompt (default: 8)")
     p.add_argument("--seed", type=int, default=0, help="which examples the prompt gets")

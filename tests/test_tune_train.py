@@ -86,6 +86,7 @@ def test_trains_patches_and_checks(model, tmp_path, capsys):
     run = json.loads((out / "run.json").read_text())
     assert run["val_loss_after"] < run["val_loss_before"]
     assert run["check_equivalent"] and run["exact_revert"] and run["tensors"] > 0
+    assert run["manifest"]["data"]["train"]["sha256"].startswith("sha256:") and run["manifest"]["seed"] == 0
     patch = Patch.load(out / "tune.neyra")
     assert cli.main(["apply", model, str(out / "tune.neyra"), "-o", str(tmp_path / "applied")]) == 0
     assert cli.main(["show", str(out / "tune.neyra")]) == 0

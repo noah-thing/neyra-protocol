@@ -66,6 +66,7 @@ class Result:
     warnings: list[str] = field(default_factory=list)
     scores: dict[str, list[float]] = field(default_factory=dict)
     case_ids: list[str] = field(default_factory=list)
+    backend: str = "torch"
 
 
 def pct(x: float) -> str:

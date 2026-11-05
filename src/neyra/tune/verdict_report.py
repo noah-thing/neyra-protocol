@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from . import manifest
 from .verdict import Result, pct, pts
 
 LIMITS = [
@@ -66,6 +67,7 @@ def document(r: Result) -> dict:
         "tuned_beat_best_free_option": r.verdict in ("worked", "worked_with_damage", "not_tested"),
         "cases": {"n": r.n, "path": r.cases_path, "scorer": r.scorer, "ids": r.case_ids},
         "margin": r.margin,
+        "backend": r.backend,
         "shots": r.shots,
         "scores": r.arms,
         "comparisons": [{"a": c.a, "b": c.b, "n": c.n, "difference": c.diff, "low": c.low, "high": c.high,
@@ -77,3 +79,10 @@ def document(r: Result) -> dict:
         "warnings": r.warnings,
         "limits": LIMITS,
     }
+
+
+def manifest_for(base: str, tuned: str, cases: str, examples: str, ggufs: list[str], seed: int) -> dict:
+    return {"command": manifest.command(), "environment": manifest.environment(), "seed": seed,
+            "base": manifest.model_record(base), "tuned": manifest.model_record(tuned),
+            "cases": manifest.file_record(cases), "examples": manifest.file_record(examples),
+            "quantized": [manifest.file_record(g) for g in ggufs]}

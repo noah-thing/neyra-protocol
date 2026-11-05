@@ -33,7 +33,7 @@ from ..numerics import to_float
 from ..patch import Patch, TensorEdit
 from ..protocol import bits_digest, tensor_table
 from ..store import Checkpoint
-from . import data
+from . import data, manifest
 from .lint import Report, lint
 from .report import headline
 
@@ -258,7 +258,8 @@ def run(opts: Options, model_path: Path, lint_report: Report, say=print) -> Resu
                         (stage / PATCH_NAME).stat().st_size, patch.id, len(patch.edits), verdict, True, *drift,
                         {"rank": opts.rank, "lr": opts.lr, "batch": batch, "layers": layers,
                          "max_length": opts.max_length, "memory_limit_gb": limit}, lint_report)
-        (stage / "run.json").write_text(json.dumps(summary_document(result), indent=2), encoding="utf-8")
+        document = {**summary_document(result), "manifest": run_manifest(opts, model_path)}
+        (stage / "run.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
         shutil.rmtree(stage / "data")
         if out.exists():
             out.rmdir()
@@ -332,6 +333,14 @@ def adapter_patch(base: Checkpoint, adapter: Checkpoint, meta: dict) -> tuple[Pa
         raise Stop(f"neyra check does not accept the patch: {wrong} tensors differ from base plus adapter ({why}). "
                    f"Nothing was kept.", "check")
     return patch, verdict, (exact, off, total, worst)
+
+
+def run_manifest(opts: Options, model_path: Path) -> dict:
+    files = {"train": manifest.file_record(opts.data)}
+    if opts.val:
+        files["validation"] = manifest.file_record(opts.val)
+    return {"command": manifest.command(), "environment": manifest.environment(), "seed": opts.seed,
+            "model": {**manifest.model_record(str(model_path)), "name": opts.model}, "data": files}
 
 
 def summary_document(r: Result) -> dict:

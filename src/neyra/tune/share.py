@@ -141,7 +141,7 @@ def build_verdict(r, base: str) -> dict:
             ok = all(by[(arm, o)].kind == "better" for o in ("base", "few-shot"))
             fmt = format_of(arm)
             held[fmt] = held.get(fmt, True) and ok
-    return {**common("verdict"), "backend": "torch", "family": family_of(base), "size": size_of(base),
+    return {**common("verdict"), "backend": r.backend, "family": family_of(base), "size": size_of(base),
             "verdict": r.verdict, "cases": case_bucket(r.n), "gain_over_base": points(by[("tuned", "base")].diff),
             "gain_over_prompt": points(by[("tuned", "few-shot")].diff),
             "quants": [{"format": f, "held": held[f]} for f in sorted(held)][:MAX_QUANTS]}
