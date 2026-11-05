@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "neyra"
 dynamic = ["version"]
-description = "Edit local model weights with patches that revert bit for bit."
+description = "Edit and fine-tune local language models, with patches that revert bit for bit."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

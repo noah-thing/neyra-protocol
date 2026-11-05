@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
-- Opt-in anonymous stats for `tune verdict`, `tune lint`, `tune train` and `hop`, asked once in a terminal and off in CI, with `--json` and under `NEYRA_NO_STATS` or `DO_NOT_TRACK`. `neyra stats` shows the state, `stats show` prints the last report, `stats off` turns it off. See docs/stats.md. Nothing is asked until a receiver URL is set in the build.
+- `tune verdict` exits 1 when a requested GGUF did not run, with the new verdict `not_tested`, and when the general check finds damage. Both used to exit 0.
+- The README leads with fine-tuning.
+- Anonymous stats for `tune verdict`, `tune lint`, `tune train` and `hop`, asked once in a terminal, Enter means yes, and off in CI, with `--json` and under `NEYRA_NO_STATS` or `DO_NOT_TRACK`. `neyra stats` shows the state, `stats show` prints the last report, `stats off` turns it off. See docs/stats.md. Nothing is asked until a receiver URL is set in the build.
 
 ## 0.3.0
 

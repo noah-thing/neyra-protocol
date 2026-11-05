@@ -1,4 +1,4 @@
-"""Edit local model weights with patches that revert bit for bit."""
+"""Edit and fine-tune local language models, with patches that revert bit for bit."""
 
 from __future__ import annotations
 
