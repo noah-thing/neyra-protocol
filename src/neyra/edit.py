@@ -28,7 +28,7 @@ from .patch import Patch, TensorEdit
 from .protocol import bits_digest, tensor_table
 from .repair import down_proj_name
 from .runtime import DeltaBatch, Hooks, Sampling
-from .store import Checkpoint
+from .store import Checkpoint, FormatError
 
 
 def on_stderr(message: str) -> None:
@@ -72,10 +72,16 @@ def parse_request(raw: dict) -> Request:
 
 def load_requests(path: str | Path) -> list[Request]:
     doc = json.loads(Path(path).read_text())
-    items = doc["requests"] if isinstance(doc, dict) else doc
-    if not items:
-        raise ValueError("no edit requests in the file")
-    return [parse_request(r) for r in items]
+    items = doc.get("requests") if isinstance(doc, dict) else doc
+    if not isinstance(items, list) or not items:
+        raise FormatError(f"{path}: expected a list of edit requests, or an object with a \"requests\" list")
+    out = []
+    for i, raw in enumerate(items):
+        try:
+            out.append(parse_request(raw))
+        except (KeyError, TypeError, AttributeError):
+            raise FormatError(f"{path}: request {i} needs a subject, a prompt and a target") from None
+    return out
 
 
 @dataclass

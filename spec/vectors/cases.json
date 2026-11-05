@@ -1245,5 +1245,480 @@
   "expect": {
    "code": "bad_proof"
   }
+ },
+ {
+  "kind": "root",
+  "id": "dot-file-is-not-a-weight-file",
+  "model": "fixtures/hidden-file",
+  "expect": {
+   "root": "sha256:eb54b374fc348f3a79937e7fad5edef74b4ecb3501dd129f95119c65afa56c7b"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "directory-named-like-a-shard-is-skipped",
+  "model": "fixtures/dir-named-safetensors",
+  "expect": {
+   "root": "sha256:eb54b374fc348f3a79937e7fad5edef74b4ecb3501dd129f95119c65afa56c7b"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "dot-file-is-not-a-weight-file",
+  "model": "fixtures/hidden-file",
+  "expect": {
+   "root": "sha256:e6cb936092bcd4e98cb8841b2a4d0ac7954a3368db679f0a299764ac6ac46a20"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "directory-named-like-a-shard-is-skipped",
+  "model": "fixtures/dir-named-safetensors",
+  "expect": {
+   "root": "sha256:e6cb936092bcd4e98cb8841b2a4d0ac7954a3368db679f0a299764ac6ac46a20"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "consolidated-is-an-ordinary-shard",
+  "model": "fixtures/consolidated-name",
+  "expect": {
+   "root": "sha256:eb54b374fc348f3a79937e7fad5edef74b4ecb3501dd129f95119c65afa56c7b"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "consolidated-is-an-ordinary-shard",
+  "model": "fixtures/consolidated-name",
+  "expect": {
+   "root": "sha256:e6cb936092bcd4e98cb8841b2a4d0ac7954a3368db679f0a299764ac6ac46a20"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "header-repeats-a-tensor-name",
+  "model": "fixtures/header-repeated-key",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "rowroot",
+  "id": "header-repeats-a-tensor-name",
+  "model": "fixtures/header-repeated-key",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "root",
+  "id": "header-repeats-a-field",
+  "model": "fixtures/header-repeated-field",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "metadata-is-an-empty-list",
+  "file": "fixtures/metadata-is-an-empty-list.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "metadata-is-null",
+  "file": "fixtures/metadata-is-null.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "metadata-is-zero",
+  "file": "fixtures/metadata-is-zero.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "metadata-is-a-string",
+  "file": "fixtures/metadata-is-a-string.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "header-repeats-a-payload-name",
+  "file": "fixtures/patch-header-repeats-payload.neyra",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "meta-is-free-text",
+  "file": "fixtures/free-text-meta.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "meta-is-free-text-with-base",
+  "file": "fixtures/free-text-meta.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "manifest-is-an-array",
+  "file": "fixtures/manifest-is-an-array.neyra",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "manifest-is-a-string",
+  "file": "fixtures/manifest-is-a-string.neyra",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "manifest-is-a-spaced-array",
+  "file": "fixtures/manifest-is-a-spaced-array.neyra",
+  "expect": {
+   "code": "not_canonical"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "manifest-is-a-float",
+  "file": "fixtures/manifest-is-a-float.neyra",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "shape-has-a-list",
+  "file": "fixtures/shape-has-a-list.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "shape-has-a-boolean",
+  "file": "fixtures/shape-has-a-boolean.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "shape-is-negative",
+  "file": "fixtures/shape-is-negative.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "name-is-a-number",
+  "file": "fixtures/name-is-a-number.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "dtype-is-a-list",
+  "file": "fixtures/dtype-is-a-list.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-kind-is-a-number",
+  "file": "fixtures/ledger-kind-is-a-number.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-body-is-a-list",
+  "file": "fixtures/ledger-body-is-a-list.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-body-is-null",
+  "file": "fixtures/ledger-body-is-null.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-seq-is-true",
+  "file": "fixtures/ledger-seq-is-true.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-seq-is-a-string",
+  "file": "fixtures/ledger-seq-is-a-string.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-time-in-other-digits",
+  "file": "fixtures/ledger-time-in-other-digits.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-time-fullwidth-digits",
+  "file": "fixtures/ledger-time-fullwidth-digits.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-time-newline",
+  "file": "fixtures/ledger-time-newline.jsonl",
+  "expect": {
+   "code": "bad_chain"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signature-with-stray-bits",
+  "file": "fixtures/receipt-signature-with-stray-bits.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-padded-payload-ok",
+  "file": "fixtures/receipt-padded-payload-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-payload-with-stray-bits",
+  "file": "fixtures/receipt-payload-with-stray-bits.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-bad-signature-then-good",
+  "file": "fixtures/receipt-bad-signature-then-good.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-good-signature-then-bad",
+  "file": "fixtures/receipt-good-signature-then-bad.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-only-a-bad-signature",
+  "file": "fixtures/receipt-only-a-bad-signature.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signatures-missing",
+  "file": "fixtures/receipt-signatures-missing.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signatures-not-a-list",
+  "file": "fixtures/receipt-signatures-not-a-list.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signature-entry-not-an-object",
+  "file": "fixtures/receipt-signature-entry-not-an-object.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signature-without-sig",
+  "file": "fixtures/receipt-signature-without-sig.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signature-sig-not-a-string",
+  "file": "fixtures/receipt-signature-sig-not-a-string.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-payload-not-a-string",
+  "file": "fixtures/receipt-payload-not-a-string.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-payload-type-wrong-and-signatures-missing",
+  "file": "fixtures/receipt-payload-type-wrong-and-signatures-missing.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-is-an-array",
+  "file": "fixtures/receipt-is-an-array.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-invalid-utf8",
+  "file": "fixtures/receipt-invalid-utf8.json",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-claim-digest-is-a-number",
+  "file": "fixtures/receipt-claim-digest-is-a-number.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-claim-digest-without-prefix",
+  "file": "fixtures/receipt-claim-digest-without-prefix.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "ledger",
+  "id": "ledger-one-entry",
+  "file": "fixtures/ledger-one-entry.jsonl",
+  "expect": {
+   "code": "ok",
+   "head": "sha256:5ea41093375d5d87b3ce4bc0e681a901e39ff0cd47dcca09d01557c56a3c686c"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-ledger-len-true",
+  "file": "fixtures/receipt-ledger-len-true.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-ledger-len-one-ok",
+  "file": "fixtures/receipt-ledger-len-one-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-ledger-len-string",
+  "file": "fixtures/receipt-ledger-len-string.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "ledger-len-true-for-one-entry",
+  "receipt": "fixtures/receipt-ledger-len-true.json",
+  "ledger": "fixtures/ledger-one-entry.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "ledger-len-one-for-one-entry",
+  "receipt": "fixtures/receipt-ledger-len-one-ok.json",
+  "ledger": "fixtures/ledger-one-entry.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "binding",
+  "id": "ledger-len-string",
+  "receipt": "fixtures/receipt-ledger-len-string.json",
+  "ledger": "fixtures/ledger-one-entry.jsonl",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
  }
 ]

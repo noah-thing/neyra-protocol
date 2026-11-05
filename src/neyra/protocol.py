@@ -10,6 +10,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 import struct
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -219,12 +220,26 @@ class Opened:
     signed: bool
 
 
-def decode_envelope(doc: dict) -> tuple[dict, bytes]:
-    if doc.get("payloadType") != PAYLOAD_TYPE:
+def strict_b64(text) -> bytes:
+    """Standard alphabet, padding required, no whitespace, and no stray bits in the last character."""
+    raw = base64.b64decode(text, validate=True)
+    if base64.b64encode(raw).decode() != text:
+        raise ValueError("not the canonical encoding")
+    return raw
+
+
+def decode_envelope(doc) -> tuple[dict, bytes]:
+    signatures = doc.get("signatures") if isinstance(doc, dict) else None
+    if (not isinstance(signatures, list) or not isinstance(doc.get("payloadType"), str)
+            or not isinstance(doc.get("payload"), str)
+            or not all(isinstance(s, dict) and isinstance(s.get("keyid"), str) and isinstance(s.get("sig"), str)
+                       for s in signatures)):
+        raise ProtocolError("bad_json", "not a DSSE envelope")
+    if doc["payloadType"] != PAYLOAD_TYPE:
         raise ProtocolError("bad_type", "not an in-toto payload")
     try:
-        payload = base64.b64decode(doc["payload"], validate=True)
-    except (KeyError, ValueError) as e:
+        payload = strict_b64(doc["payload"])
+    except ValueError as e:
         raise ProtocolError("bad_json", "payload is not base64") from e
     statement = strict_loads(payload)
     if jcs(statement) != payload:
@@ -238,20 +253,26 @@ def check_signature(doc: dict, payload: bytes, public: bytes) -> None:
 
     wanted = digest("key", public)
     key = Ed25519PublicKey.from_public_bytes(public)
-    for s in doc.get("signatures", []):
-        if s.get("keyid") != wanted:
+    for s in doc["signatures"]:
+        if s["keyid"] != wanted:
             continue
         try:
-            key.verify(base64.b64decode(s["sig"], validate=True), pae(PAYLOAD_TYPE, payload))
+            key.verify(strict_b64(s["sig"]), pae(PAYLOAD_TYPE, payload))
             return
-        except (InvalidSignature, ValueError) as e:
-            raise ProtocolError("bad_signature", "signature does not verify") from e
-    raise ProtocolError("bad_signature", "no signature from this key")
+        except (InvalidSignature, ValueError):
+            continue
+    raise ProtocolError("bad_signature", "no signature from this key verifies")
+
+
+def hex_of(value) -> str | None:
+    """The hex part of a well formed digest string, or None for anything else."""
+    return value[7:] if isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value) else None
 
 
 def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
     statement, payload = decode_envelope(doc)
-    if statement.get("_type") != STATEMENT_TYPE or statement.get("predicateType") != PREDICATE_TYPE:
+    if (not isinstance(statement, dict) or statement.get("_type") != STATEMENT_TYPE
+            or statement.get("predicateType") != PREDICATE_TYPE):
         raise ProtocolError("bad_type", "wrong statement or predicate type")
     predicate = statement.get("predicate")
     claim = predicate.get("claim") if isinstance(predicate, dict) else None
@@ -266,10 +287,9 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
         raise ProtocolError("subject_mismatch", "malformed subject") from e
     if count != 2 or set(subjects) != {"result-weights", "patch"}:
         raise ProtocolError("subject_mismatch", "subject must name the result and the patch")
-    if subjects["result-weights"] != str(claim["result_root"]).split(":", 1)[-1]:
-        raise ProtocolError("subject_mismatch", "subject does not match the claim")
-    if subjects["patch"] != str(claim["patch_id"]).split(":", 1)[-1]:
-        raise ProtocolError("subject_mismatch", "patch subject does not match the claim")
+    for name, member in (("result-weights", "result_root"), ("patch", "patch_id")):
+        if subjects[name] != hex_of(claim[member]):
+            raise ProtocolError("subject_mismatch", f"{name} subject does not match the claim's {member}")
     if public is None:
         return Opened(statement, False)
     check_signature(doc, payload, public)

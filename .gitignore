@@ -8,3 +8,5 @@ dist/
 .neyra/
 !spec/vectors/fixtures/**/*.safetensors
 !tests/fixtures/**/*.safetensors
+findings/
+.hypothesis/

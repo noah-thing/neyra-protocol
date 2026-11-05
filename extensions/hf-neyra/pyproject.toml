@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hf-neyra"
+version = "0.1.0"
+description = "Diff, check and verify model weights from the hf CLI, reading only what it needs over HTTP."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = ["neyra>=0.2.0"]
+
+# hf looks for a console script called exactly hf-<name> in the extension's virtualenv.
+[project.scripts]
+hf-neyra = "hf_neyra:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hf_neyra"]

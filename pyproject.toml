@@ -4,13 +4,26 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neyra"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Version control for what a neural network does: diff, blame, bisect and patch model weights."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Noah" }]
 keywords = ["llm", "interpretability", "model-editing", "safetensors", "mcp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = ["numpy>=1.26", "cryptography>=42"]
 
 [project.optional-dependencies]
@@ -19,17 +32,34 @@ torch = ["torch>=2.6", "transformers>=5.0", "accelerate"]
 mcp = ["mcp>=2.0"]
 gguf = ["gguf>=0.17"]
 eval = ["math-verify>=0.9"]
-dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0"]
+dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0", "pyyaml"]
 
 [project.scripts]
 neyra = "neyra.cli:main"
 
+[project.urls]
+Source = "https://github.com/noah-thing/neyra-protocol"
+Changelog = "https://github.com/noah-thing/neyra-protocol/blob/main/CHANGELOG.md"
+Issues = "https://github.com/noah-thing/neyra-protocol/issues"
+
+[tool.hatch.version]
+path = "src/neyra/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/neyra"]
 
+# `neyra conformance` runs these against an installed copy, so a verifier can be checked without a clone.
+[tool.hatch.build.targets.wheel.force-include]
+"spec/vectors" = "neyra/vectors"
+"spec/PROTOCOL.md" = "neyra/vectors/PROTOCOL.md"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/spec", "/impl", "/bench", "/benchmarks", "/experiments", "/action.yml",
+           "/CHANGELOG.md", "/SECURITY.md", "/LICENSE", "/README.md", "/AGENTS.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["bench"]
+pythonpath = ["bench", "fuzz"]
 markers = ["model: needs real model weights on disk"]
 addopts = "-m 'not model'"
 asyncio_mode = "auto"

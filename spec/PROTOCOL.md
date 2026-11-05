@@ -61,8 +61,10 @@ the same weights have the same root. It does not cover tokenizers, configs or ch
 
 A model is the union of the tensors in its weight files. In a directory those are the regular top
 level files whose names end in `.safetensors`, compared case sensitively, in any order, skipping
-names that start with a dot. The same tensor name in two files is `bad_safetensors`, as is
-a model with no weight files.
+names that start with a dot. Directories, even ones named `x.safetensors`, are not files and are skipped.
+The same tensor name in two files is `bad_safetensors`, as is a model with no weight files. No file is
+skipped for its name alone: `consolidated.safetensors` is a shard like any other. A tool that reads a Hub
+repository may leave out such duplicate copies as a convenience, and then it is not computing this root.
 
 ## 4. Reading safetensors
 
@@ -73,7 +75,10 @@ of non negative integers, or two non negative offsets; the byte span differs fro
 shape require; spans are not contiguous from zero when sorted; or bytes remain after the last span.
 A header that fails to parse is `bad_safetensors`, not `bad_json`.
 
-The member `__metadata__`, if present, MUST map strings to strings.
+The member `__metadata__`, if present, MUST be an object that maps strings to strings. Null, an array, a
+string or a number there is `bad_safetensors`, not the same as absent. A key that appears twice in the header
+object, or in any object inside it, is `bad_safetensors`: two readers must not see different tensors under
+one name.
 
 Item sizes: `BOOL U8 I8 F8_E4M3 F8_E5M2 F8_E8M0` are 1, `U16 I16 F16 BF16` are 2, `U32 I32 F32` are
 4, and `U64 I64 F64` are 8.
@@ -81,7 +86,8 @@ Item sizes: `BOOL U8 I8 F8_E4M3 F8_E5M2 F8_E8M0` are 1, `U16 I16 F16 BF16` are 2
 ## 5. Patch
 
 A patch is one safetensors file. Its `__metadata__` holds `neyra.manifest`, a string containing the
-JCS encoding of the manifest. It MAY hold `neyra.meta`, which is free text outside the patch identity.
+JCS encoding of the manifest. It MAY hold `neyra.meta`, which is free text outside the patch identity and
+which a verifier MUST NOT parse or reject.
 
 Manifest members, all REQUIRED:
 
@@ -115,9 +121,11 @@ A verifier MUST run these steps in order and report the first failure:
 1. Read the file as safetensors. `bad_safetensors`
 2. Require `neyra.manifest` and parse it strictly. `bad_type` if absent, `bad_json` if malformed.
 3. The string MUST equal the JCS encoding of what it parsed to. `not_canonical`
-4. `type` MUST be `neyra.patch/1`. `bad_type`
+4. The manifest MUST be an object whose `type` is `neyra.patch/1`. Any other JSON value that passed step 3 is
+   `bad_type`.
 5. Check for unknown members at the top level, then in tensor entries. `unknown_member`
-6. A required member that is missing or of the wrong JSON type, a digest that is not well formed, or
+6. A required member that is missing or of the wrong JSON type (`name` and `dtype` are strings, `shape` is a
+   list of non negative integers and not booleans), a digest that is not well formed, or
    a `tensors` array that is unsorted or repeats a name, is `bad_manifest`.
 7. Check `requires`. `unknown_extension`
 8. Each payload tensor MUST exist with the right dtype, the two lengths MUST agree, and the file MUST
@@ -146,7 +154,8 @@ entry, or `sha256:` and 64 zeros for the first), `time` (RFC 3339 UTC string), `
 The head is the digest of the last entry. A verifier MUST report `bad_chain` if a line is not
 canonical or does not parse, if members differ, if `seq` is out of order, if `prev` is wrong, if
 `time` does not match the pattern `YYYY-MM-DDThh:mm:ssZ`, or if a non empty file does not end with
-0x0A. The check is on the pattern alone, not on whether the date exists. An empty file is a valid
+0x0A. The check is on the pattern alone, not on whether the date exists, and every digit is ASCII 0 to 9.
+`seq` is a JSON integer, not a boolean, `kind` a string and `body` an object. An empty file is a valid
 ledger of no entries, with the all zero digest as its head. A writer recovering from a crash truncates to the last complete line and appends an
 entry of kind `recovered`.
 
@@ -166,7 +175,10 @@ Each statement has `metric`, `estimate`, `ci_low`, `ci_high` (decimal strings), 
 
 A receipt is a DSSE envelope, as JSON, which need not itself be canonical. Base64 here is strict:
 standard alphabet, required padding, no whitespace. Members are `payloadType`, set to `application/vnd.in-toto+json`, `payload`
-(standard base64 with padding), and `signatures`, an array of `{keyid, sig}`.
+(standard base64 with padding), and `signatures`, an array of `{keyid, sig}`, where `keyid` and `sig` are
+strings. Base64 is also canonical: the unused bits of the last character MUST be zero (RFC 4648 section 3.5),
+so one byte string has one encoding. An envelope that is not an object, lacks a member, or has a member or
+signature entry of the wrong type is `bad_json`, before anything else is looked at.
 
 The payload is the JCS encoding of an in-toto Statement v1:
 
@@ -185,7 +197,7 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
 
 ### Verification order
 
-1. Parse the envelope. `bad_json`
+1. Parse the envelope, including the shape described above. `bad_json`
 2. `payloadType` MUST match. `bad_type`
 3. Decode the payload, parse it strictly. `bad_json`
 4. It MUST be canonical. `not_canonical`
@@ -194,9 +206,11 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
    plus `ledger_head`, `ledger_len`, and `digest_algorithm` equal to `neyra/weights/v1`. Only presence
    and those two values are checked here, not the types of other claim members. `bad_claim`
 7. `subject` MUST hold exactly the two named entries, in either order, and they MUST match
-   `result_root` and `patch_id` in the claim. `subject_mismatch`
-8. With a public key: some entry in `signatures` MUST have its `keyid` and a signature that verifies.
-   Malformed base64 in `sig` is a verification failure. `bad_signature`
+   `result_root` and `patch_id` in the claim. Those two claim members MUST be well formed digests, and a
+   subject digest is compared with the hex after `sha256:`. `subject_mismatch`
+8. With a public key: some entry in `signatures` MUST have its `keyid` and a signature that verifies. An
+   entry that has the key but fails does not stop a later one from succeeding. Malformed base64 in `sig`
+   is a verification failure of that entry. `bad_signature`
 
 An envelope with no signatures is an unauthenticated record, and tools MUST say so. A public key
 that is not 32 bytes is a usage error, outside this protocol.
@@ -209,7 +223,7 @@ first failure, which includes `ledger_head` or `ledger_len` being of the wrong t
 
 1. The patch id and the patch's `result_root` MUST equal those in the claim.
 2. `ledger_head` MUST be the digest of an entry in the ledger.
-3. `ledger_len` MUST equal that entry's `seq` plus one.
+3. `ledger_len` MUST be a JSON integer, not a boolean, equal to that entry's `seq` plus one.
 
 Revealing the salt and items lets anyone check `holdout_commit`, which is outside conformance.
 

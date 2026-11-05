@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -176,10 +177,7 @@ def cmd_merge(a) -> int:
     return FINDINGS if shared else OK
 
 
-def cmd_check(a) -> int:
-    base, merged = Checkpoint.open(a.base), Checkpoint.open(a.merged)
-    adapter = Checkpoint.open(a.adapter) if a.adapter else None
-    c = check(base, merged, adapter, a.ulps)
+def render_check(c, base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | None) -> str:
     counts = {s: c.count(s) for s in (IDENTICAL, MERGED, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
     text = [f"base    {base.spec}", f"merged  {merged.spec}"]
     if adapter:
@@ -214,11 +212,19 @@ def cmd_check(a) -> int:
     if len(shown) > 30:
         text.append(f"... and {len(shown) - 30} more")
     text.append("\n" + ("equivalent" if c.equivalent else "NOT equivalent"))
+    return "\n".join(text)
+
+
+def cmd_check(a) -> int:
+    base, merged = Checkpoint.open(a.base), Checkpoint.open(a.merged)
+    adapter = Checkpoint.open(a.adapter) if a.adapter else None
+    c = check(base, merged, adapter, a.ulps)
+    counts = {s: c.count(s) for s in (IDENTICAL, MERGED, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
     emit(a, {"base": base.spec, "merged": merged.spec, "adapter": adapter.spec if adapter else None,
              "equivalent": c.equivalent, "paths": c.paths, "recast": sorted(c.recast), "counts": counts,
              "faint": [t.name for t in c.faint], "adapter_tensors": c.targeted,
              "adapter_modules": c.modules, "added": c.added, "leftover_adapter_tensors": c.leftover,
-             "tensors": [vars(t) for t in c.tensors]}, "\n".join(text))
+             "tensors": [vars(t) for t in c.tensors]}, render_check(c, base, merged, adapter))
     return OK if c.equivalent else FINDINGS
 
 
@@ -239,9 +245,14 @@ def local_path(spec: str) -> str:
     if Path(spec).expanduser().exists():
         return str(Path(spec).expanduser())
     from huggingface_hub import snapshot_download
+    from huggingface_hub.errors import HfHubHTTPError
 
     repo, _, rev = spec.partition("@")
-    return snapshot_download(repo, revision=rev or None)
+    try:
+        return snapshot_download(repo, revision=rev or None)
+    except HfHubHTTPError as e:
+        raise Fail(BAD_INPUT, f"{spec}: not a folder on disk, and the Hub has no readable repo by that name "
+                              f"(HTTP {e.response.status_code if e.response is not None else '?'}; gated repos need HF_TOKEN)") from e
 
 
 def cmd_probe(a) -> int:
@@ -451,7 +462,10 @@ def open_indexed(spec: str, path: str | None) -> tuple[Checkpoint, Index]:
 def cmd_clock(a) -> int:
     if a.check:
         claim = strict_loads(Path(a.check).read_text())
-        problems = check_claim(claim, Checkpoint.open(a.a), Checkpoint.open(a.b))
+        try:
+            problems = check_claim(claim, Checkpoint.open(a.a), Checkpoint.open(a.b))
+        except (KeyError, TypeError, AttributeError) as e:
+            raise Fail(BAD_INPUT, f"{a.check}: not a clock claim ({type(e).__name__}: {e})") from e
         text = [f"{claim['verdict']} on {claim['n']:,} entries of {claim['tensor']}, rows reproduced from the bytes"
                 if not problems else "claim does not hold"] + [f"problem: {p}" for p in problems]
         emit(a, {"verdict": claim["verdict"], "problems": problems}, "\n".join(text))
@@ -469,10 +483,22 @@ def cmd_clock(a) -> int:
     return OK
 
 
+def read_public_key(path: str) -> bytes:
+    try:
+        key = bytes.fromhex(Path(path).read_text().strip())
+    except ValueError:
+        key = b""
+    if len(key) != 32:
+        raise Fail(BAD_INPUT, f"{path}: not a public key; use the .pub file that neyra keygen wrote")
+    return key
+
+
 def cmd_verify(a) -> int:
-    public = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+    public = read_public_key(a.key) if a.key else None
     doc = strict_loads(Path(a.receipt).read_text())
-    if isinstance(doc, dict) and doc.get("type") == PROOF_TYPE:
+    if not isinstance(doc, dict):
+        raise Fail(BAD_INPUT, f"{a.receipt}: not a receipt or row proof, which are JSON objects")
+    if doc.get("type") == PROOF_TYPE:
         return verify_rows(a, doc)
     opened = open_envelope(doc, public)
     predicate = opened.statement["predicate"]
@@ -539,6 +565,38 @@ def cmd_doctor(a) -> int:
 
 
 def cmd_demo(a) -> int:
+    if a.story == "edit":
+        return edit_demo()
+    if a.story == "files":
+        return demo_files(a.dir)
+    from .demo import run
+
+    if run():
+        return OK
+    print("neyra: the demo did not behave as designed, which is a bug; please report it", file=sys.stderr)
+    return FAILED
+
+
+def demo_files(target: str | None) -> int:
+    """Write the demo's toy models to disk, so every command can be tried by hand."""
+    from .demo import build
+
+    if not target:
+        raise Fail(USAGE, "name a folder to write them to: neyra demo files DIR")
+    out = Path(target)
+    if out.exists() and any(out.iterdir()):
+        raise Fail(BAD_INPUT, f"{out} is not empty")
+    out.mkdir(parents=True, exist_ok=True)
+    build(out)
+    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+    print(f"wrote base, merged, forgot-to-merge and adapter to {out}, {size / 1000:.0f} KB in all\n\ntry:\n"
+          f"  neyra check {out}/base {out}/forgot-to-merge --adapter {out}/adapter\n"
+          f"  neyra check {out}/base {out}/merged --adapter {out}/adapter\n"
+          f"  neyra diff {out}/base {out}/merged")
+    return OK
+
+
+def edit_demo() -> int:
     """Plant an edit in a small random model, then recover it from the weights alone."""
     rng = np.random.default_rng(0)
     name = "model.layers.3.mlp.down_proj.weight"
@@ -571,6 +629,31 @@ def cmd_demo(a) -> int:
     return OK
 
 
+def vectors_dir(given: str | None) -> Path:
+    """The conformance vectors: the folder named, the copy shipped in the wheel, or the repo's own."""
+    if given:
+        return Path(given).expanduser()
+    here = Path(__file__).resolve().parent
+    for candidate in (here / "vectors", here.parents[1] / "spec" / "vectors"):
+        if (candidate / "cases.json").is_file():
+            return candidate
+    raise Fail(ENVIRONMENT, "the conformance vectors are not in this install; pass the spec/vectors folder")
+
+
+def cmd_conformance(a) -> int:
+    from .conformance import run_vectors
+
+    root = vectors_dir(a.vectors)
+    if not (root / "cases.json").is_file():
+        raise Fail(BAD_INPUT, f"{root}: no cases.json, so this is not a vectors folder")
+    total = len(json.loads((root / "cases.json").read_text()))
+    failures = run_vectors(root)
+    text = [f"FAIL {case}: want {want}, got {got}" for case, want, got in failures]
+    text.append(f"{total - len(failures)}/{total} conformance vectors passed")
+    emit(a, {"total": total, "failed": [{"case": c, "want": w, "got": g} for c, w, g in failures]}, "\n".join(text))
+    return FINDINGS if failures else OK
+
+
 def cmd_mcp(a) -> int:
     from .lab import Lab, Task
     from .mcp_server import build
@@ -582,10 +665,10 @@ def cmd_mcp(a) -> int:
     return OK
 
 
-def parser() -> argparse.ArgumentParser:
+def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="machine readable output")
-    ap = argparse.ArgumentParser(prog="neyra", description=__doc__)
+    ap = argparse.ArgumentParser(prog=prog, description=__doc__)
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -594,7 +677,11 @@ def parser() -> argparse.ArgumentParser:
         p.set_defaults(fn=fn)
         return p
 
-    p = command("demo", cmd_demo, "plant an edit in a tiny model and recover it, in seconds, with no downloads")
+    p = command("demo", cmd_demo, "catch a merge that never took its adapter, on a toy model, with no downloads")
+    p.add_argument("story", nargs="?", default="merge", choices=["merge", "edit", "files"],
+                   help="merge (default); edit: plant an edit in a tiny model and recover it from the weights; "
+                        "files DIR: write the toy models out to try the commands on")
+    p.add_argument("dir", nargs="?", help="folder for `demo files`")
 
     p = command("diff", cmd_diff, "what changed between two checkpoints, and how")
     p.add_argument("base")
@@ -730,12 +817,24 @@ def parser() -> argparse.ArgumentParser:
                    help="extra directory the agent may read patches from or export to")
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
+    p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
+    p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
+
     command("doctor", cmd_doctor, "check this machine and what it can run")
     return ap
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+def hub_error(e: urllib.error.HTTPError) -> str:
+    repo = re.search(r"/api/models/(.+?)/revision/", e.url or "")
+    name = f" for {repo[1]}" if repo else ""
+    if e.code in (401, 403, 404):
+        return (f"Hugging Face returned {e.code}{name}: no such repo, or it is gated (set HF_TOKEN). "
+                "A path that does not exist on disk ends up here too")
+    return f"Hugging Face returned {e.code}{name}; try again"
+
+
+def main(argv: list[str] | None = None, prog: str = "neyra") -> int:
+    args = parser(prog).parse_args(argv)
     try:
         return args.fn(args)
     except Fail as e:
@@ -754,11 +853,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"neyra: {e}", file=sys.stderr)
         return FAILED
     except urllib.error.HTTPError as e:
-        hint = "check the repo name, or set HF_TOKEN for a gated model" if e.code in (401, 403, 404) else "try again"
-        print(f"neyra: Hugging Face returned {e.code}: {hint}", file=sys.stderr)
+        print(f"neyra: {hub_error(e)}", file=sys.stderr)
         return BAD_INPUT
+    except urllib.error.URLError as e:
+        print(f"neyra: cannot reach Hugging Face ({e.reason}); check the connection, or use a folder on disk",
+              file=sys.stderr)
+        return ENVIRONMENT
     except FileNotFoundError as e:
         print(f"neyra: {e.filename}: no such file", file=sys.stderr)
+        return BAD_INPUT
+    except UnicodeDecodeError:
+        print("neyra: bad input: expected a text file but found binary data; is this the right file?", file=sys.stderr)
+        return BAD_INPUT
+    except OSError as e:
+        why = e.strerror or (str(e).splitlines() or ["failed"])[0]
+        print(f"neyra: {e.filename or 'I/O error'}: {why}", file=sys.stderr)
         return BAD_INPUT
     except KeyboardInterrupt:
         print("neyra: interrupted", file=sys.stderr)

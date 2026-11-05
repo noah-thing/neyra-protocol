@@ -327,6 +327,173 @@ proof_case("unknown-member", [(60, 66)], "grid", lambda p: p.update(extra=1), ex
 (ROWS / "not-json.data").write_bytes(b"")
 case("rowproof", "not-json", {"code": "bad_proof"}, proof="fixtures/rows/not-json.json", data="fixtures/rows/not-json.data")
 
+
+# Cases found by fuzz/differential.py, where the Python and Go verifiers first disagreed. The spec text is the
+# authority for each expected result.
+def raw_file(path, header, data=b""):
+    """A safetensors file from header text, so that malformed headers can be written on purpose."""
+    text = header if isinstance(header, bytes) else json.dumps(header, separators=(",", ":")).encode()
+    text += b" " * (-len(text) % 8)
+    Path(path).write_bytes(struct.pack("<Q", len(text)) + text + data)
+
+
+def entry_of(dtype, shape, start, stop):
+    return {"dtype": dtype, "shape": shape, "data_offsets": [start, stop]}
+
+
+def run_root(model_dir):
+    return _run(ROOT, {"kind": "root", "model": model_dir})["root"]
+
+
+def run_rowroot(model_dir):
+    return _run(ROOT, {"kind": "rowroot", "model": model_dir})["root"]
+
+
+base_root_value, base_rows_value = run_root("fixtures/base"), run_rowroot("fixtures/base")
+hidden = model("hidden-file", {"w": a, "é.bias": b, "z": c})
+raw_file(hidden / ".ghost.safetensors", {"ghost": entry_of("U8", [1], 0, 1)}, b"x")
+nested = model("dir-named-safetensors", {"w": a, "é.bias": b, "z": c})
+(nested / "folder.safetensors").mkdir()
+(nested / "folder.safetensors" / ".keep").write_text("")
+for kind, expected in (("root", base_root_value), ("rowroot", base_rows_value)):
+    case(kind, "dot-file-is-not-a-weight-file", {"root": expected}, model="fixtures/hidden-file")
+    case(kind, "directory-named-like-a-shard-is-skipped", {"root": expected}, model="fixtures/dir-named-safetensors")
+
+split = model("consolidated-name", {"w": a, "é.bias": b}, {"z": c})
+(FIX / "consolidated-name" / "model-1.safetensors").rename(FIX / "consolidated-name" / "consolidated.safetensors")
+case("root", "consolidated-is-an-ordinary-shard", {"root": base_root_value}, model="fixtures/consolidated-name")
+case("rowroot", "consolidated-is-an-ordinary-shard", {"root": base_rows_value}, model="fixtures/consolidated-name")
+
+dup_top = model("header-repeated-key", {"w": a})
+good_header = (dup_top / "model-0.safetensors").read_bytes()
+hlen = struct.unpack("<Q", good_header[:8])[0]
+header_text = good_header[8:8 + hlen].decode().rstrip()
+payload_bytes = good_header[8 + hlen:]
+raw_file(dup_top / "model-0.safetensors", (header_text[:-1] + "," + header_text[1:-1] + "}").encode(), payload_bytes)
+case("root", "header-repeats-a-tensor-name", {"code": "bad_safetensors"}, model="fixtures/header-repeated-key")
+case("rowroot", "header-repeats-a-tensor-name", {"code": "bad_safetensors"}, model="fixtures/header-repeated-key")
+dup_field = model("header-repeated-field", {"w": a})
+raw_file(dup_field / "model-0.safetensors", header_text.replace('"dtype":"BF16"', '"dtype":"BF16","dtype":"BF16"').encode(), payload_bytes)
+case("root", "header-repeats-a-field", {"code": "bad_safetensors"}, model="fixtures/header-repeated-field")
+
+good_blob = (FIX / "good.neyra").read_bytes()
+good_len = struct.unpack("<Q", good_blob[:8])[0]
+good_header_doc = json.loads(good_blob[8:8 + good_len])
+good_payload = good_blob[8 + good_len:]
+for name, change in (("metadata-is-an-empty-list", lambda h: h.update({"__metadata__": []})),
+                     ("metadata-is-null", lambda h: h.update({"__metadata__": None})),
+                     ("metadata-is-zero", lambda h: h.update({"__metadata__": 0})),
+                     ("metadata-is-a-string", lambda h: h.update({"__metadata__": ""}))):
+    doc = json.loads(json.dumps(good_header_doc))
+    change(doc)
+    raw_file(FIX / f"{name}.neyra", doc, good_payload)
+    case("patch", name, {"code": "bad_safetensors"}, file=f"fixtures/{name}.neyra")
+dup_patch = good_blob[8:8 + good_len].decode().rstrip()
+raw_file(FIX / "patch-header-repeats-payload.neyra", (dup_patch[:-1] + ',"0.idx":' + json.dumps(good_header_doc["0.idx"]) + "}").encode(), good_payload)
+case("patch", "header-repeats-a-payload-name", {"code": "bad_safetensors"}, file="fixtures/patch-header-repeats-payload.neyra")
+
+doc = json.loads(json.dumps(good_header_doc))
+doc["__metadata__"]["neyra.meta"] = "this is a note, not JSON"
+raw_file(FIX / "free-text-meta.neyra", doc, good_payload)
+case("patch", "meta-is-free-text", {"code": "ok"}, file="fixtures/free-text-meta.neyra")
+case("patch", "meta-is-free-text-with-base", {"code": "ok"}, file="fixtures/free-text-meta.neyra", base="fixtures/base")
+
+
+def manifest_text(name, text, expect):
+    doc = json.loads(json.dumps(good_header_doc))
+    doc["__metadata__"]["neyra.manifest"] = text
+    raw_file(FIX / f"{name}.neyra", doc, good_payload)
+    case("patch", name, {"code": expect}, file=f"fixtures/{name}.neyra")
+
+
+manifest_text("manifest-is-an-array", "[]", "bad_type")
+manifest_text("manifest-is-a-string", '"neyra.patch/1"', "bad_type")
+manifest_text("manifest-is-a-spaced-array", "[ 1 ]", "not_canonical")
+manifest_text("manifest-is-a-float", "1.5", "bad_json")
+tampered("shape-has-a-list.neyra", lambda d: d["tensors"][0].update({"shape": [[1]]}), expect="bad_manifest")
+tampered("shape-has-a-boolean.neyra", lambda d: d["tensors"][0].update({"shape": [True]}), expect="bad_manifest")
+tampered("shape-is-negative.neyra", lambda d: d["tensors"][0].update({"shape": [-1]}), expect="bad_manifest")
+tampered("name-is-a-number.neyra", lambda d: d["tensors"][0].update({"name": 7}), expect="bad_manifest")
+tampered("dtype-is-a-list.neyra", lambda d: d["tensors"][0].update({"dtype": ["BF16"]}), expect="bad_manifest")
+
+reseal_head = GENESIS
+
+
+def sealed(rows):
+    """Entries chained from the genesis, with each prev recomputed after the edit."""
+    out, previous = [], GENESIS
+    for row in rows:
+        row = dict(row, prev=previous)
+        out.append(row)
+        previous = entry_digest(row)
+    return out
+
+
+def second(**change):
+    return sealed([entries[0], {**entries[1], **change}, entries[2]])
+
+
+ledger("ledger-kind-is-a-number.jsonl", [jcs(x) for x in second(kind=7)], expect={"code": "bad_chain"})
+ledger("ledger-body-is-a-list.jsonl", [jcs(x) for x in second(body=[])], expect={"code": "bad_chain"})
+ledger("ledger-body-is-null.jsonl", [jcs(x) for x in second(body=None)], expect={"code": "bad_chain"})
+ledger("ledger-seq-is-true.jsonl", [jcs(x) for x in second(seq=True)], expect={"code": "bad_chain"})
+ledger("ledger-seq-is-a-string.jsonl", [jcs(x) for x in second(seq="1")], expect={"code": "bad_chain"})
+ledger("ledger-time-in-other-digits.jsonl", [jcs(x) for x in second(time="\u0662\u0660\u0662\u0666-11-04T12:01:00Z")],
+       expect={"code": "bad_chain"})
+ledger("ledger-time-fullwidth-digits.jsonl", [jcs(x) for x in second(time="\uff12\uff10\uff12\uff16-11-04T12:01:00Z")],
+       expect={"code": "bad_chain"})
+ledger("ledger-time-newline.jsonl", [jcs(x) for x in second(time="2026-11-04T12:01:00Z\n")], expect={"code": "bad_chain"})
+
+payload_raw = jcs(statement)
+sig_entry = signed["signatures"][0]
+sig_raw = base64.b64decode(sig_entry["sig"])
+alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+sig_text = sig_entry["sig"]
+sig_unused_bits = sig_text[:-3] + alphabet[alphabet.index(sig_text[-3]) ^ 1] + sig_text[-2:]
+assert base64.b64decode(sig_unused_bits) == sig_raw
+receipt("receipt-signature-with-stray-bits.json", {**signed, "signatures": [{**sig_entry, "sig": sig_unused_bits}]}, "bad_signature", pub)
+padded = dict(claim, note="x")
+while len(jcs(statement_for(padded, good.id, head, 3))) % 3 != 1:
+    padded["note"] += "x"
+padded_statement = statement_for(padded, good.id, head, 3)
+padded_envelope = envelope(padded_statement, secret)
+payload_text = padded_envelope["payload"]
+assert payload_text.endswith("==")
+payload_unused_bits = payload_text[:-3] + alphabet[alphabet.index(payload_text[-3]) ^ 1] + payload_text[-2:]
+receipt("receipt-padded-payload-ok.json", padded_envelope, "ok", pub)
+receipt("receipt-payload-with-stray-bits.json", {**padded_envelope, "payload": payload_unused_bits}, "bad_json", pub)
+bad_sig = {"keyid": sig_entry["keyid"], "sig": base64.b64encode(bytes(64)).decode()}
+receipt("receipt-bad-signature-then-good.json", {**signed, "signatures": [bad_sig, sig_entry]}, "ok", pub)
+receipt("receipt-good-signature-then-bad.json", {**signed, "signatures": [sig_entry, bad_sig]}, "ok", pub)
+receipt("receipt-only-a-bad-signature.json", {**signed, "signatures": [bad_sig]}, "bad_signature", pub)
+receipt("receipt-signatures-missing.json", {k: v for k, v in signed.items() if k != "signatures"}, "bad_json")
+receipt("receipt-signatures-not-a-list.json", {**signed, "signatures": sig_entry}, "bad_json")
+receipt("receipt-signature-entry-not-an-object.json", {**signed, "signatures": [1, sig_entry]}, "bad_json")
+receipt("receipt-signature-without-sig.json", {**signed, "signatures": [{"keyid": sig_entry["keyid"]}]}, "bad_json")
+receipt("receipt-signature-sig-not-a-string.json", {**signed, "signatures": [{**sig_entry, "sig": 5}]}, "bad_json")
+receipt("receipt-payload-not-a-string.json", {**signed, "payload": 5}, "bad_json")
+receipt("receipt-payload-type-wrong-and-signatures-missing.json",
+        {"payloadType": "text/plain", "payload": signed["payload"]}, "bad_json")
+receipt("receipt-is-an-array.json", [signed], "bad_json")
+(FIX / "receipt-invalid-utf8.json").write_bytes(b'{"payloadType":"\xff"}')
+case("receipt", "receipt-invalid-utf8", {"code": "bad_json"}, file="fixtures/receipt-invalid-utf8.json")
+numeric = json.loads(jcs(statement))
+numeric["predicate"]["claim"]["patch_id"] = 7
+numeric["subject"][1]["digest"]["sha256"] = "7"
+receipt("receipt-claim-digest-is-a-number.json", envelope(numeric, secret), "subject_mismatch", pub)
+bare = json.loads(jcs(statement))
+bare["predicate"]["claim"]["result_root"] = good.result_root.split(":", 1)[1]
+receipt("receipt-claim-digest-without-prefix.json", envelope(bare, secret), "subject_mismatch", pub)
+
+one_entry = [jcs(entries[0])]
+ledger("ledger-one-entry.jsonl", one_entry)
+first_head = entry_digest(entries[0])
+for id, length in (("ledger-len-true", True), ("ledger-len-one-ok", 1), ("ledger-len-string", "1")):
+    receipt(f"receipt-{id}.json", envelope(statement_for(claim, good.id, first_head, length), secret), "ok", pub)
+binding("ledger-len-true-for-one-entry", "binding_mismatch", "fixtures/receipt-ledger-len-true.json", "fixtures/ledger-one-entry.jsonl")
+binding("ledger-len-one-for-one-entry", "ok", "fixtures/receipt-ledger-len-one-ok.json", "fixtures/ledger-one-entry.jsonl")
+binding("ledger-len-string", "binding_mismatch", "fixtures/receipt-ledger-len-string.json", "fixtures/ledger-one-entry.jsonl")
+
 for c_ in cases:
     if c_["expect"] is None or (c_["kind"] == "ledger" and c_["expect"] is None) or c_["kind"] == "ledger" and c_["expect"] == {"code": "ok"}:
         c_["expect"] = _run(ROOT, c_)

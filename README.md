@@ -26,12 +26,23 @@ notes give the same formula with a strength of 6.
 ## Try it
 
 ```sh
-uvx neyra demo          # plants an edit in a tiny model and recovers it, no download, under a second
-uvx neyra diff BASE OTHER --sample 4
+git clone https://github.com/noah-thing/neyra-protocol && cd neyra-protocol
+uv tool install .       # or: pip install .
+neyra demo              # a merge that never took its adapter, caught; then a correct one. No download, 0.1 s
+neyra diff BASE OTHER --sample 4
 ```
 
-Both work on any machine with Python 3.10 or later, with no GPU. To run models, install
-`neyra[mlx]` on Apple Silicon or `neyra[torch]` elsewhere. `neyra doctor` shows what your machine can do.
+<!-- On the first PyPI release, replace the three install lines above with: uvx neyra demo / uv tool install neyra
+     / pip install neyra, and the extras below keep working as written. RELEASING.md lists every such place. -->
+
+This works on any machine with Python 3.10 or later, with no GPU. `neyra demo files DIR` writes the toy models it
+uses (about 210 KB) so you can run `check`, `diff` and `patch` on them by hand, and `neyra conformance` runs the
+protocol's 195 test vectors against your install. To run models, install `neyra[mlx]` on Apple Silicon or
+`neyra[torch]` elsewhere. `neyra doctor` shows what your machine can do.
+
+To check merges in CI, `uses: noah-thing/neyra-protocol@main` runs `neyra check` and fails the job when the
+adapter was never applied; the inputs are in [`action.yml`](action.yml). From the `hf` command line, the
+extension in [`extensions/hf-neyra`](extensions/hf-neyra) gives `hf neyra diff` and `hf neyra check`.
 
 ## What it does
 
@@ -49,6 +60,7 @@ Both work on any machine with Python 3.10 or later, with no GPU. To run models, 
 | `neyra index`, `prove` | Prove a few rows of a tensor against a rows root, reading only those rows |
 | `neyra clock` | Claim that two checkpoints share a scalar on rows training never fed, bound to their rows roots |
 | `neyra mcp` | Serve a measured lab to any agent |
+| `neyra demo`, `conformance` | Try it on a toy model, and run the protocol's test vectors against this install |
 
 A patch is a safetensors file, so opening one cannot execute code. The published 0.8B edit is a 1.3 MB
 patch that rebuilds exactly against the published hashes, and a 37 KB rank 1 LoRA that stock
@@ -175,11 +187,17 @@ depend on any of these.
 
 [`spec/PROTOCOL.md`](spec/PROTOCOL.md) defines the patch, claim, ledger and receipt formats, with RFC 8785
 canonical JSON, domain separated digests, and a weights root that covers every tensor and ignores how
-files are sharded. [`spec/vectors`](spec/vectors) holds 138 conformance cases.
+files are sharded. [`spec/vectors`](spec/vectors) holds 195 conformance cases.
 
 [`impl/go`](impl/go) is a second verifier in Go. It was written from the spec and vectors alone, with no
-access to the Python source, and it passes the first 103. The problems it exposed in the spec were fixed. The 35
-row proof cases of Annex B were added later by the Python author, so they are not yet an independent check.
+access to the Python source, and it passed the first 103. The problems it exposed in the spec were fixed. The 35
+row proof cases of Annex B and the 57 cases that came out of differential fuzzing were added later by the Python
+author, so they are not yet an independent check. It passes all 195.
+
+[`fuzz/differential.py`](fuzz/differential.py) mutates valid patches, ledgers, receipts, row proofs and models,
+runs both verifiers on every mutant, and ranks disagreements with wrongly accepted input first. It is the first
+piece of a public arena where independent verifiers are scored on the invalid claims they wrongly accept. Its
+first run found 17 points of disagreement, listed in [`CHANGELOG.md`](CHANGELOG.md); each is now a vector.
 
 Annex B adds a second root over the same tensors, so a few rows of a remote checkpoint can be checked with
 the rows and a proof of about a kilobyte. `neyra index` builds it, `neyra prove` and `neyra verify` use it.

@@ -30,6 +30,10 @@ RAW = {1: "U8", 2: "U16", 4: "U32", 8: "U64"}
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
+def good_shape(value) -> bool:
+    return isinstance(value, list) and all(type(d) is int and d >= 0 for d in value)
+
+
 def good_digest(value) -> bool:
     return isinstance(value, str) and DIGEST.fullmatch(value) is not None
 
@@ -43,13 +47,11 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
         return "bad_type"
     try:
         doc = strict_loads(meta[MANIFEST_KEY])
-        if not isinstance(doc, dict):
-            return "bad_json"
         if jcs(doc).decode() != meta[MANIFEST_KEY]:
             return "not_canonical"
     except ProtocolError as e:
         return e.code
-    if doc.get("type") != TYPE:
+    if not isinstance(doc, dict) or doc.get("type") != TYPE:
         return "bad_type"
     entries = doc.get("tensors") if isinstance(doc.get("tensors"), list) else []
     if any(k not in KNOWN_MEMBERS and not k.startswith("x-") for k in doc):
@@ -62,7 +64,9 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
     if not all(isinstance(x, str) for x in doc["requires"]) or not all(map(good_digest, (doc["base_root"], doc["result_root"]))):
         return "bad_manifest"
     for t in entries:
-        if not isinstance(t, dict) or not TENSOR_MEMBERS <= set(t) or t["dtype"] not in ITEMSIZE or not isinstance(t["shape"], list):
+        if not isinstance(t, dict) or not TENSOR_MEMBERS <= set(t) or not isinstance(t["name"], str):
+            return "bad_manifest"
+        if not isinstance(t["dtype"], str) or t["dtype"] not in ITEMSIZE or not good_shape(t["shape"]):
             return "bad_manifest"
         if not all(good_digest(t[k]) for k in ("base_digest", "result_digest", "idx_digest", "val_digest")):
             return "bad_manifest"
@@ -91,7 +95,7 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
     if base is None:
         return "ok"
     patch = Patch.load(path)
-    ck = Checkpoint.open(str(base))
+    ck = Checkpoint.open(str(base), protocol=True)
     table = tensor_table(ck)
     if root_of(table) != patch.base_root:
         return "base_mismatch"
@@ -117,7 +121,7 @@ def check_ledger(path: str | Path) -> tuple[str, str | None]:
 
 def check_receipt(path: str | Path, public: bytes | None = None) -> str:
     try:
-        doc = strict_loads(Path(path).read_text())
+        doc = strict_loads(Path(path).read_bytes())
         open_envelope(doc, public)
     except ProtocolError as e:
         return e.code
@@ -140,9 +144,11 @@ def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) ->
     if p.id != claim["patch_id"] or p.result_root != claim["result_root"]:
         return "binding_mismatch"
     entries, _ = read_entries(Path(ledger))
+    length = predicate["ledger_len"]
     for e in entries:
         if entry_digest(e) == predicate["ledger_head"]:
-            return "ok" if predicate["ledger_len"] == e["seq"] + 1 else "binding_mismatch"
+            # bool is an int in Python: `True == 1` must not satisfy a ledger of one entry.
+            return "ok" if type(length) is int and length == e["seq"] + 1 else "binding_mismatch"
     return "binding_mismatch"
 
 
@@ -160,7 +166,10 @@ def run_vectors(root: str | Path) -> list[tuple[str, str, str]]:
     failures = []
     for case in json.loads((root / "cases.json").read_text()):
         kind, want = case["kind"], case["expect"]
-        got = _run(root, case)
+        try:
+            got = _run(root, case)
+        except Exception as e:  # noqa: BLE001 - a verifier that crashes on a vector has failed it
+            got = {"crash": f"{type(e).__name__}: {e}"}
         if got != want:
             failures.append((f"{kind}:{case['id']}", str(want), str(got)))
     return failures
@@ -183,7 +192,7 @@ def _run(root: Path, case: dict):
         return {"digest": digest(case["domain"], bytes.fromhex(case["data_hex"]))}
     if kind == "root":
         try:
-            return {"root": root_of(tensor_table(Checkpoint.open(str(root / case["model"]))))}
+            return {"root": root_of(tensor_table(Checkpoint.open(str(root / case["model"]), protocol=True)))}
         except FormatError:
             return {"code": "bad_safetensors"}
     if kind == "patch":
@@ -200,7 +209,7 @@ def _run(root: Path, case: dict):
         return {"root": text(tree_root(leaves))}
     if kind == "rowroot":
         try:
-            return {"root": build_index(Checkpoint.open(str(root / case["model"]))).rows_root}
+            return {"root": build_index(Checkpoint.open(str(root / case["model"]), protocol=True)).rows_root}
         except FormatError:
             return {"code": "bad_safetensors"}
     if kind == "rowproof":

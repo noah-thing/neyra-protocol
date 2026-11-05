@@ -286,6 +286,14 @@ func readReceipt(file string, pub []byte) (*receipt, error) {
 	if !ok1 || !ok2 || !ok3 {
 		return nil, Code("bad_json")
 	}
+	for _, sg := range sigs {
+		m, _ := sg.(map[string]any)
+		_, hasKey := m["keyid"].(string)
+		_, hasSig := m["sig"].(string)
+		if !hasKey || !hasSig {
+			return nil, Code("bad_json")
+		}
+	}
 	if pt != "application/vnd.in-toto+json" {
 		return nil, Code("bad_type")
 	}

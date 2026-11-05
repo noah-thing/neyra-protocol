@@ -1,0 +1,80 @@
+name: Neyra check
+description: Fail the job when a merged model is not what its base model and LoRA adapter produce.
+author: Noah
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  base:
+    description: Base model, as a Hub repo (owner/name) or a folder.
+    required: true
+  merged:
+    description: The merged model to check, as a Hub repo or a folder.
+    required: true
+  adapter:
+    description: The LoRA adapter folder or Hub repo that was merged in. Leave empty to compare two models only.
+    required: false
+    default: ""
+  ulps:
+    description: Steps of the dtype two tensors may differ by and still count as rounding.
+    required: false
+    default: "1"
+  package:
+    description: What pip installs. Use a path or a git URL to test a checkout.
+    required: false
+    default: neyra
+  python-version:
+    description: Python to run neyra with.
+    required: false
+    default: "3.12"
+
+outputs:
+  equivalent:
+    description: "true when the merged model matches, false when it does not."
+    value: ${{ steps.check.outputs.equivalent }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install neyra
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+      run: python -m pip install --quiet "$PACKAGE"
+
+    - name: neyra check
+      id: check
+      shell: bash
+      env:
+        BASE: ${{ inputs.base }}
+        MERGED: ${{ inputs.merged }}
+        ADAPTER: ${{ inputs.adapter }}
+        ULPS: ${{ inputs.ulps }}
+      run: |
+        args=("$BASE" "$MERGED" --ulps "$ULPS")
+        if [ -n "$ADAPTER" ]; then args+=(--adapter "$ADAPTER"); fi
+        report="${RUNNER_TEMP:-/tmp}/neyra-check.txt"
+        status=0
+        neyra check "${args[@]}" > "$report" 2>&1 || status=$?
+        cat "$report"
+        {
+          echo "### neyra check"
+          echo '```'
+          cat "$report"
+          echo '```'
+        } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+        case "$status" in
+          0) echo "equivalent=true" >> "${GITHUB_OUTPUT:-/dev/null}" ;;
+          1) echo "equivalent=false" >> "${GITHUB_OUTPUT:-/dev/null}"
+             echo "::error title=neyra check::the merged model does not match its base and adapter"
+             if grep -q "ADAPTER WAS NEVER APPLIED" "$report"; then
+               echo "::error title=neyra check::the adapter was never applied; the merged model is the base model"
+             fi ;;
+          *) echo "::error title=neyra check::neyra could not run the check (exit $status)" ;;
+        esac
+        exit "$status"

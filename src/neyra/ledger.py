@@ -15,7 +15,7 @@ from pathlib import Path
 from .protocol import ProtocolError, digest, jcs, now, plain, strict_loads
 
 GENESIS = "sha256:" + "0" * 64
-TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # \d would accept other scripts' digits
 
 
 def entry_digest(entry: dict) -> str:
@@ -59,7 +59,10 @@ def walk(entries: list[dict]) -> tuple[str, int]:
             raise BrokenChain(f"entry {i} has the wrong members")
         if not isinstance(e["time"], str) or not TIME.fullmatch(e["time"]):
             raise BrokenChain(f"entry {i} has a malformed time")
-        if e["seq"] != i or e["prev"] != head:
+        if not isinstance(e["kind"], str) or not isinstance(e["body"], dict):
+            raise BrokenChain(f"entry {i} needs a string kind and an object body")
+        # bool is an int in Python, so `True != 1` would let a boolean pass for a sequence number.
+        if type(e["seq"]) is not int or e["seq"] != i or e["prev"] != head:
             raise BrokenChain(f"entry {i} does not follow entry {i - 1}")
         head = entry_digest(e)
     return head, len(entries)

@@ -119,10 +119,48 @@ func vectors(dir string) int {
 	return 0
 }
 
-func main() {
-	if len(os.Args) != 3 || os.Args[1] != "vectors" {
-		fmt.Fprintln(os.Stderr, "usage: neyra-verify vectors <path to spec/vectors>")
-		os.Exit(2)
+// guarded reports a panic as a result, so one hostile input cannot hide the rest of a batch.
+func guarded(dir string, v vector) (code, value string) {
+	defer func() {
+		if r := recover(); r != nil {
+			code, value = fmt.Sprintf("panic: %v", r), ""
+		}
+	}()
+	return run(dir, v)
+}
+
+// results runs every case without comparing, and prints what the verifier observed as one JSON array. The
+// differential fuzzer uses it to line this verifier up against another on cases that have no expected value.
+func results(dir string) int {
+	b, err := os.ReadFile(filepath.Join(dir, "cases.json"))
+	var cases []vector
+	if err == nil {
+		err = json.Unmarshal(b, &cases)
 	}
-	os.Exit(vectors(os.Args[2]))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	type observed struct {
+		Code  string `json:"code"`
+		Value string `json:"value"`
+	}
+	out := make([]observed, len(cases))
+	for i, v := range cases {
+		out[i].Code, out[i].Value = guarded(dir, v)
+	}
+	enc, _ := json.Marshal(out)
+	fmt.Println(string(enc))
+	return 0
+}
+
+func main() {
+	if len(os.Args) == 3 && os.Args[1] == "vectors" {
+		os.Exit(vectors(os.Args[2]))
+	}
+	if len(os.Args) == 3 && os.Args[1] == "run" {
+		os.Exit(results(os.Args[2]))
+	}
+	fmt.Fprintln(os.Stderr, "usage: neyra-verify vectors|run <path to a folder holding cases.json>")
+	os.Exit(2)
 }

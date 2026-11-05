@@ -194,7 +194,10 @@ class Patch:
                                   or payload_digest(edit.right) != t.get("right_digest")):
                 raise PatchMismatch(f"{t['name']}: payload does not match the manifest", "payload_mismatch")
             edits.append(edit)
-        extras = json.loads(meta.get(META_KEY, "{}"))
+        try:
+            extras = json.loads(meta.get(META_KEY, "{}"))
+        except ValueError:
+            extras = {META_KEY: meta[META_KEY]}  # the spec calls it free text, so it is not ours to reject
         return cls(edits, extras, doc["base_root"], doc["result_root"])
 
 

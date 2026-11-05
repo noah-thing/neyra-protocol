@@ -143,6 +143,16 @@ def _entry(file: str, name: str, info) -> tuple[str, tuple[int, ...], int, int]:
     return dtype, tuple(shape), begin, end
 
 
+def unique_keys(pairs):
+    """Two readers must not see different tensors under one name, so a repeated key is an error, not last-wins."""
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError(f"duplicate key {key!r}")
+        out[key] = value
+    return out
+
+
 def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
     if blob.size < 8:
         raise FormatError(f"{blob.name}: too short to be safetensors")
@@ -150,13 +160,13 @@ def parse_header(blob) -> tuple[dict[str, TensorRef], dict[str, str]]:
     if n > MAX_HEADER or 8 + n > blob.size:
         raise FormatError(f"{blob.name}: header length {n} is out of bounds")
     try:
-        header = json.loads(blob.read(8, n))
+        header = json.loads(blob.read(8, n), object_pairs_hook=unique_keys)
     except (UnicodeDecodeError, ValueError, RecursionError) as e:
         raise FormatError(f"{blob.name}: header is not JSON") from e
     if not isinstance(header, dict):
         raise FormatError(f"{blob.name}: header is not an object")
 
-    meta = header.pop("__metadata__", None) or {}
+    meta = header.pop("__metadata__", {})
     if not isinstance(meta, dict) or not all(isinstance(v, str) for v in meta.values()):
         raise FormatError(f"{blob.name}: __metadata__ must map strings to strings")
     base = 8 + n
@@ -188,9 +198,14 @@ def merge(shards) -> dict[str, TensorRef]:
     return tensors
 
 
+def weight_files(files: list[str]) -> list[str]:
+    """The top level weight files, which is what PROTOCOL.md section 3 calls a model: dot files are skipped."""
+    return [f for f in files if f.endswith(".safetensors") and "/" not in f and not f.startswith(".")]
+
+
 def canonical_shards(files: list[str]) -> list[str]:
     """The Hugging Face weights of a repo, skipping second copies such as original/ or consolidated."""
-    top = [f for f in files if f.endswith(".safetensors") and "/" not in f]
+    top = weight_files(files)
     return [f for f in top if not f.startswith("consolidated")] or top
 
 
@@ -219,17 +234,18 @@ class Checkpoint:
         return None if body is None else body.decode(errors="replace")
 
     @classmethod
-    def open(cls, spec: str, token: str | None = None) -> Checkpoint:
+    def open(cls, spec: str, token: str | None = None, protocol: bool = False) -> Checkpoint:
+        """protocol=True reads a folder exactly as the spec defines a model, with no Hub convention applied."""
         path = Path(spec).expanduser()
         if path.exists():
-            return cls._local(path)
+            return cls._local(path, protocol)
         return cls._hub(spec, token or os.environ.get("HF_TOKEN"))
 
     @classmethod
-    def _local(cls, path: Path) -> Checkpoint:
+    def _local(cls, path: Path, protocol: bool = False) -> Checkpoint:
         root = path if path.is_dir() else path.parent
-        shards = ([root / f for f in canonical_shards([p.name for p in path.glob("*.safetensors")])]
-                  if path.is_dir() else [path])
+        pick = weight_files if protocol else canonical_shards
+        shards = [root / f for f in pick([p.name for p in path.iterdir() if p.is_file()])] if path.is_dir() else [path]
         if not shards:
             raise FormatError(f"{path}: no safetensors files")
         tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)

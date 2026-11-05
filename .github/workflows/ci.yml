@@ -21,7 +21,7 @@ jobs:
       - run: uv pip install -e '.[dev]'
       - if: runner.os == 'macOS' && matrix.python != '3.10'
         run: uv pip install -e '.[dev,mlx]'
-      - run: uv run --no-sync ruff check src tests experiments
+      - run: uv run --no-sync ruff check src tests experiments scripts extensions fuzz
       - run: uv run --no-sync pytest -q
 
   go:
@@ -33,3 +33,59 @@ jobs:
           go-version: stable
       - run: go run . vectors ../../spec/vectors
         working-directory: impl/go
+
+  wheel:
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - name: install the wheel alone into a fresh venv and run every command that needs no model
+        run: |
+          uv venv --python ${{ matrix.python }} /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+          /tmp/clean/bin/python scripts/smoke_installed.py
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: uv pip install -e '.[dev]'
+      - run: uv run --no-sync python fuzz/differential.py --cases 5000 --batches 2
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv pip install -e .
+      - run: uv run --no-sync neyra demo files "$RUNNER_TEMP/toy"
+      - name: a correct merge passes
+        uses: ./
+        with:
+          base: ${{ runner.temp }}/toy/base
+          merged: ${{ runner.temp }}/toy/merged
+          adapter: ${{ runner.temp }}/toy/adapter
+          package: .
+      - name: an adapter that was never applied fails the job
+        id: broken
+        uses: ./
+        continue-on-error: true
+        with:
+          base: ${{ runner.temp }}/toy/base
+          merged: ${{ runner.temp }}/toy/forgot-to-merge
+          adapter: ${{ runner.temp }}/toy/adapter
+          package: .
+      - name: it did fail, and said so
+        run: test "${{ steps.broken.outcome }}" = failure && test "${{ steps.broken.outputs.equivalent }}" = false

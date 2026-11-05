@@ -59,8 +59,18 @@ def test_signed_receipt_round_trip_and_tampering(tmp_path, model_dir, rng, capsy
     assert main(args) == 5
 
 
-def test_demo_runs_and_recovers(capsys):
+def test_demo_catches_the_unapplied_merge_then_passes_the_good_one(capsys, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     assert main(["demo"]) == 0
+    out = capsys.readouterr().out
+    first, second = out.split("The same adapter merged the way PEFT merges it")
+    assert "THE ADAPTER WAS NEVER APPLIED" in first and "exit 1" in first
+    assert "every edited tensor is what peft produces" in second and "exit 0" in second
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_edit_demo_runs_and_recovers(capsys):
+    assert main(["demo", "edit"]) == 0
     out = capsys.readouterr().out
     assert "4.0" in out and "32 of 1024 columns" in out and "identical to the edited one: True" in out
 
@@ -116,3 +126,12 @@ def test_verify_rows_fails_on_a_different_model(tmp_path, model_dir, rng):
 
 def test_prove_needs_an_index_for_a_remote_model():
     assert main(["prove", "someone/model", "--tensor", "w", "--rows", "0:1"]) in (2, 3, 4)
+
+
+def test_demo_files_writes_models_that_check_can_use(tmp_path, capsys):
+    out = tmp_path / "toy"
+    assert main(["demo", "files", str(out)]) == 0
+    assert main(["check", str(out / "base"), str(out / "forgot-to-merge"), "--adapter", str(out / "adapter")]) == 1
+    assert main(["check", str(out / "base"), str(out / "merged"), "--adapter", str(out / "adapter")]) == 0
+    assert main(["demo", "files", str(out)]) == 3
+    assert main(["demo", "files"]) == 2

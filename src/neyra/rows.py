@@ -29,7 +29,16 @@ from .protocol import (
     strict_loads,
     tensor_prefix,
 )
-from .store import CHUNK, ITEMSIZE, RAW_DTYPE, Checkpoint, LocalBlob, TensorRef, parse_header
+from .store import (
+    CHUNK,
+    ITEMSIZE,
+    RAW_DTYPE,
+    Checkpoint,
+    FormatError,
+    LocalBlob,
+    TensorRef,
+    parse_header,
+)
 
 INDEX_TYPE = "neyra.rows/1"
 INDEX_KEY = "neyra.rows"
@@ -143,7 +152,13 @@ def tensor_leaf(name: str, dtype: str, shape, tree: bytes) -> bytes:
 def parse_ranges(spec: str) -> list[tuple[int, int]]:
     """'0:10,50:60' as sorted ranges, with overlapping or touching ones merged."""
     out: list[list[int]] = []
-    for a, b in sorted(tuple(int(x) for x in part.split(":")) for part in spec.split(",")):
+    try:
+        parts = sorted(tuple(int(x) for x in part.split(":")) for part in spec.split(","))
+        if any(len(p) != 2 for p in parts):
+            raise ValueError
+    except ValueError:
+        raise FormatError(f"{spec!r}: rows are written start:stop, such as 0:10 or 0:10,50:60") from None
+    for a, b in parts:
         if out and a <= out[-1][1]:
             out[-1][1] = max(out[-1][1], b)
         else:
