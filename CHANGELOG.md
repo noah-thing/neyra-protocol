@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- Tidied the docs and help text.
+
 ## 0.3.3
 
 Security fixes from an audit of what a hostile file can do. None of these allowed code execution.

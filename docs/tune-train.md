@@ -53,7 +53,7 @@ From mlx-lm's LoRA guide, with two changes for short runs on small files.
 | `--batch-size` | 4 | |
 | `--max-length` | 512 | longer rows are cut, as lint reports |
 | validation | a tenth of the rows, at least one batch, or `--val FILE` | needed for the loss before and after |
-| memory | MLX limited to 60% of RAM (`--memory-gb`); gradient checkpointing when the weights take over a quarter of that | a 16 GB Mac stays usable |
+| memory | MLX limited to 60% of RAM (`--memory-gb`); gradient checkpointing when the weights take over a quarter of that | the machine stays usable |
 
 Refusals: a model whose weights exceed 80% of the memory limit, an adapter that changed no weight, a quantized model (merging into 4 bit weights rounds
 again, so the patch would not be exact), fewer than 12 rows without `--val`, and any machine that is not Apple silicon.

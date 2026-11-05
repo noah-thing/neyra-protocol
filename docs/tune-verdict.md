@@ -88,7 +88,7 @@ drop. A file that could not run counts against it: nothing was measured. Otherwi
 
 ## Checked on
 
-Run on a CPU Mac with torch for the models and llama.cpp build 11960 (`8642541b2`) for the files. Every case file, log
+Run with torch for the models and llama.cpp build 11960 (`8642541b2`) for the files. Every case file, log
 and the scripts that built the files are in `~/weights-research/c4/` (`proofs/tv_*`, `results/tv_*`). The numbers are
 one run each: greedy decoding is deterministic, and the intervals are over cases.
 

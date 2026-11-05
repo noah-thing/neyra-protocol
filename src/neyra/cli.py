@@ -83,7 +83,7 @@ Defaults, from mlx-lm's LoRA guide and sized for a few dozen to a few thousand r
   rank 8, scale 20, dropout 0, the last 16 layers (all, if fewer), Adam at 2e-5 (the guide's 1e-5 barely moves a
   run of under 100 steps), batch 4, rows cut at 512 tokens, 3 passes over the data. A tenth of the rows is held
   out for the loss before and after. MLX is told to stay under 60% of RAM, and gradient checkpointing turns on
-  when the weights take over a quarter of that, so a 16 GB Mac can train a model up to about 4B parameters.
+  when the weights take over a quarter of that, so the machine stays usable.
 Needs an Apple silicon Mac and: uv tool install 'neyra[tune,mlx]'
 """
 

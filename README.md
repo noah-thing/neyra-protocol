@@ -233,8 +233,8 @@ models. Receipts list the inputs needed to rerun a claim, since a signature only
 | `merge` | Matches exhaustive rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
 | Python and Go verifiers | Agree on 312 vectors and on mutated inputs from a differential fuzzer | [`fuzz/differential.py`](https://github.com/noah-thing/neyra-protocol/blob/main/fuzz/differential.py) |
 
-Direct edits so far rewrite facts and remove loops, and none has been shown to add ability. `tune train` has run on models under 1B, on a Mac, on one style task. ROME led `edit` on the 20
-development cases compared, and the full comparison is unfinished. Nothing has been tested above 1B parameters. The
+Direct edits so far rewrite facts and remove loops, and none has been shown to add ability. `tune train` has run on a Mac, on one style task. ROME led `edit` on the 20
+development cases compared, and the full comparison is unfinished. Testing so far has been on smaller models, mostly Qwen. The
 [limits page](https://github.com/noah-thing/neyra-protocol/blob/main/docs/limits.md) has the rest.
 
 ## Documentation
