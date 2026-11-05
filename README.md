@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><strong>Prove what changed in a model.</strong><br>Check, diff, edit and sign model weights, bit for bit.</p>
+<p align="center"><strong>Edit what a local model does, directly in its weights.</strong><br>Change it, measure it, undo it, and prove what changed.</p>
 
 <p align="center">
   <a href="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml/badge.svg"></a>
@@ -25,20 +25,22 @@
 
 ---
 
-A model file changes hands many times: fine-tuned, merged, converted, quantized, re-uploaded. File hashes say the
-bytes moved. Model cards say what someone typed. Neither tells you what the tensors actually are.
+Neyra is a workbench for the inside of a model. Instead of prompting a local model or retraining it, you find the
+directions and neurons behind a behaviour and change them: rewrite a fact, remove a reasoning loop, write a change
+into the layers that carry it. Agents can do this too, under a fixed budget, against a test they cannot see.
 
-Neyra reads the tensors. It works out what changed, recomputes what a merge should have produced, and records a
-change as a small file anyone can verify without running the model or trusting whoever sent it.
+Editing weights is only useful if you can trust the result, so every change is a small exact patch you can undo bit
+for bit. Each one is measured against what it might have damaged, and refused if it did harm. Neyra also reads
+changes made by anyone else, so you can see what a fine-tune, a merge or a conversion really did to the tensors.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/terminal-dark.svg">
   <img src="docs/assets/terminal-light.svg" alt="neyra diff recovering a published weight edit" width="100%">
 </picture>
 
-That is the edit from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
-found with no hints by reading 4% of the two checkpoints over HTTP range requests. The authors' notes give the same
-formula with a strength of 6.
+That is a weight edit an agent made to stop a model looping, from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
+recovered with no hints by reading 4% of the two checkpoints over HTTP range requests. The authors' notes give the
+same formula with a strength of 6.
 
 ## Quick start
 
@@ -55,13 +57,28 @@ correct merge passing. Python 3.10 or later is all it needs. To run models, inst
 Then point it at real files, local or on the Hugging Face Hub:
 
 ```sh
-neyra diff BASE OTHER --sample 4              # what changed, from a few percent of the bytes
-neyra check BASE MERGED --adapter ADAPTER     # is this merge what its adapter says it should be
+neyra probe MODEL                             # what goes wrong: loops, runaway thinking, missing answers
+neyra fix MODEL -o fix.neyra                  # find a loop direction and write a candidate patch
+neyra edit MODEL facts.json -o edit.neyra     # write facts into the model, measured and revertible
+neyra apply MODEL edit.neyra -o edited-model  # rebuild the edited model, bit for bit
+
+neyra diff BASE OTHER --sample 4              # what any change did, from a few percent of the bytes
 neyra hop BASE ADAPTER MERGED model.gguf      # which hop lost my fine-tune
-neyra identity BASE MODEL                     # what is this model, relative to the base it declares
 ```
 
 ## Commands
+
+**Edit**
+
+| Command | What it does |
+|---|---|
+| [`edit`](docs/edit.md) | Write facts into a model as a low rank patch, and refuse to call it a success if it did harm |
+| `fix` | Find the direction behind a loop and write a candidate patch that removes it |
+| `probe` | Run a model through a fixed battery and report loops, runaway thinking and missing answers |
+| `patch`, `apply`, `show` | Store any edit as a small exact file and rebuild it bit for bit |
+| [`merge`](docs/merge.md) | Combine patches exactly, with the same bytes in any order |
+| [`bisect`](docs/bisect.md) | Find the smallest part of an edit that keeps its effect |
+| `export` | Turn a patch into a LoRA for PEFT or stock llama.cpp |
 
 **Inspect**
 
@@ -71,17 +88,6 @@ neyra identity BASE MODEL                     # what is this model, relative to 
 | [`check`](docs/check.md) | Whether a merge matches its parts, recomputed the way PEFT and mlx-lm do it |
 | [`hop`](docs/hop.md) | The first hop that differs across base, adapter, merged model and GGUF, in one sentence |
 | [`identity`](docs/identity.md) | Same weights, a named transform, a derivative, or unrelated |
-| `probe` | Runs a model through a fixed battery and reports loops and missing answers |
-
-**Change**
-
-| Command | What it does |
-|---|---|
-| `patch`, `apply`, `show` | Store an edit as a small exact file and rebuild it bit for bit |
-| [`edit`](docs/edit.md) | Write facts into a model as a low rank patch, and refuse to call it a success if it did harm |
-| [`merge`](docs/merge.md) | Combine patches exactly, with the same bytes in any order |
-| [`bisect`](docs/bisect.md) | The smallest part of a patch that keeps its effect |
-| `export` | Turn a patch into a LoRA for PEFT or stock llama.cpp |
 
 **Prove**
 
@@ -130,8 +136,9 @@ made a claim, not that it is true, so receipts name everything needed to rerun i
 | `merge` is independent of order | Checked against brute force rounding and all 24 orders of four patches | [`tests/test_merge.py`](tests/test_merge.py) |
 | The verifiers agree | Python and a second verifier in Go on 312 vectors and every mutant of a differential fuzzer | [`fuzz/differential.py`](fuzz/differential.py) |
 
-Each of these has limits, stated with it. `edit` is not claimed to beat ROME, which led on the 20 development cases
-compared so far. Everything has been tested on models under 1B parameters. [What Neyra does not do](docs/limits.md)
+Each of these has limits, stated with it. Weight edits can rewrite a fact or remove an obstacle such as a loop; they
+have not been shown to add ability. `edit` is not claimed to beat ROME, which led on the 20 development cases compared
+so far. Everything has been tested on models under 1B parameters. [What Neyra does not do](docs/limits.md)
 lists the rest and is worth reading before you rely on any of this.
 
 ## Documentation

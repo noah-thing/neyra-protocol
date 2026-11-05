@@ -1,4 +1,4 @@
-"""Version control for what a neural network does."""
+"""Edit what a local model does, directly in its weights, and prove what changed."""
 
 from __future__ import annotations
 

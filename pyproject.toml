@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "neyra"
 dynamic = ["version"]
-description = "Prove what changed in a model: check, diff, edit and sign model weights, bit for bit."
+description = "Edit what a local model does, directly in its weights, and prove what changed."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
