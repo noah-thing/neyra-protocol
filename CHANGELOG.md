@@ -1,8 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- `neyra edit MODEL "The capital of [France] is" Rome` takes a single fact on the command line.
+- First release on PyPI.
+
 ## 0.2.0, first release
 
-Not yet published. 0.1.x was the private working version.
+0.1.x was the private working version.
 
 ### Install and first run
 - `neyra demo` shows a merge that never took its LoRA adapter, caught by `check`, then the same merge done

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-    <img src="docs/assets/logo-light.svg" alt="Neyra" width="260">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/logo-light.svg" alt="Neyra" width="260">
   </picture>
 </p>
 
@@ -9,9 +9,9 @@
 
 <p align="center">
   <a href="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-blue"></a>
+  <a href="https://github.com/noah-thing/neyra-protocol/blob/main/LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-blue"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <a href="spec/PROTOCOL.md"><img alt="312 conformance vectors" src="https://img.shields.io/badge/conformance-312_vectors-brightgreen"></a>
+  <a href="https://github.com/noah-thing/neyra-protocol/blob/main/spec/PROTOCOL.md"><img alt="312 conformance vectors" src="https://img.shields.io/badge/conformance-312_vectors-brightgreen"></a>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
   <a href="#design">Design</a> ·
   <a href="#results">Results</a> ·
   <a href="#documentation">Docs</a> ·
-  <a href="spec/PROTOCOL.md">Spec</a>
+  <a href="https://github.com/noah-thing/neyra-protocol/blob/main/spec/PROTOCOL.md">Spec</a>
 </p>
 
 ---
@@ -36,8 +36,8 @@ recomputes a LoRA merge with the rounding PEFT and mlx-lm use, and `hop` walks b
 the first one that differs.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/terminal-dark.svg">
-  <img src="docs/assets/terminal-light.svg" alt="neyra diff on the Weight-Space Programming edit" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-dark.svg">
+  <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-light.svg" alt="neyra diff on the Weight-Space Programming edit" width="100%">
 </picture>
 
 `neyra diff` on the loop edit from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
@@ -46,8 +46,7 @@ reading 4% of both checkpoints over HTTP range requests. The authors' notes give
 ## Install
 
 ```sh
-git clone https://github.com/noah-thing/neyra-protocol && cd neyra-protocol
-uv tool install .        # or: pip install .
+pip install neyra        # or: uv tool install neyra
 neyra demo
 ```
 
@@ -79,39 +78,39 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 
 | Command | |
 |---|---|
-| [`edit`](docs/edit.md) | Write facts as a low rank patch. Exits 1 if it misses its gates |
+| [`edit`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md) | Write facts as a low rank patch. Exits 1 if it misses its gates |
 | `fix` | Find a loop direction and write a candidate patch |
 | `probe` | Run a fixed battery and report loops, runaway thinking and missing answers |
 | `patch`, `apply`, `show` | Write the difference between two checkpoints as a patch, rebuild from it, inspect it |
-| [`merge`](docs/merge.md) | Sum patches on one base with exact arithmetic. Order does not change the bytes |
-| [`bisect`](docs/bisect.md) | Find the smallest part of a patch that keeps its effect |
+| [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum patches on one base with exact arithmetic. Order does not change the bytes |
+| [`bisect`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md) | Find the smallest part of a patch that keeps its effect |
 | `export` | Write a patch as a LoRA for PEFT or llama.cpp |
 
 **Inspect**
 
 | Command | |
 |---|---|
-| [`diff`](docs/accuracy.md) | Compare two checkpoints and name the form of the change |
-| [`check`](docs/check.md) | Recompute a merge per tool and compare bits |
-| [`hop`](docs/hop.md) | Report the first artifact that differs across base, adapter, merged model and GGUF |
-| [`identity`](docs/identity.md) | Compare a model with its declared base: same weights, named transform, derivative, unrelated |
+| [`diff`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/accuracy.md) | Compare two checkpoints and name the form of the change |
+| [`check`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md) | Recompute a merge per tool and compare bits |
+| [`hop`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md) | Report the first artifact that differs across base, adapter, merged model and GGUF |
+| [`identity`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/identity.md) | Compare a model with its declared base: same weights, named transform, derivative, unrelated |
 
 **Sign**
 
 | Command | |
 |---|---|
-| [`attest`](docs/signing.md), `render`, `supersede`, `withdraw`, `status` | Sign a statement of a change for OpenSSF model signing and CycloneDX tools |
+| [`attest`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), `render`, `supersede`, `withdraw`, `status` | Sign a statement of a change for OpenSSF model signing and CycloneDX tools |
 | `verify`, `log`, `keygen` | Check receipts and hash chained ledgers |
-| [`index`](docs/protocol.md), `prove` | Prove rows of a tensor against a root by reading only those rows |
+| [`index`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/protocol.md), `prove` | Prove rows of a tensor against a root by reading only those rows |
 | `conformance` | Run the test vectors against your install |
 
 **Automate**
 
 | | |
 |---|---|
-| [`neyra mcp`](docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash chained ledger |
-| [`action.yml`](action.yml) | GitHub Action that fails a job when a merge does not match its adapter |
-| [`hf-neyra`](extensions/hf-neyra) | `hf neyra diff` and `hf neyra check` |
+| [`neyra mcp`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash chained ledger |
+| [`action.yml`](https://github.com/noah-thing/neyra-protocol/blob/main/action.yml) | GitHub Action that fails a job when a merge does not match its adapter |
+| [`hf-neyra`](https://github.com/noah-thing/neyra-protocol/blob/main/extensions/hf-neyra) | `hf neyra diff` and `hf neyra check` |
 
 ## Design
 
@@ -133,37 +132,37 @@ also lists what you need to rerun the claim.
 `hop` takes artifacts in the order a fine-tune passed through them:
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hops-dark.svg">
-  <img src="docs/assets/hops-light.svg" alt="base, adapter, merged and GGUF, with merged marked as the first hop that differs" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/hops-dark.svg">
+  <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/hops-light.svg" alt="base, adapter, merged and GGUF, with merged marked as the first hop that differs" width="100%">
 </picture>
 
 ## Results
 
 | | Result | Rerun |
 |---|---|---|
-| `edit`, Qwen3-0.6B, 200 unseen CounterFact cases | Efficacy 1.00, paraphrase 0.95, neighbours 0.70 (0.745 before) | [`bench/edit_counterfact.py`](bench/edit_counterfact.py) |
-| `diff`, planted edits, 50 trials each | 100% form recovery on 12 of 14 conditions, 0 false alarms in 250 noise trials | [`bench/forensics.py`](bench/forensics.py) |
-| `check`, real merges | PEFT 0.21.2 and mlx-lm 0.32.2 in fp32, bf16 and fp16, matched bit for bit | [`tests/test_check_real.py`](tests/test_check_real.py) |
-| `merge` | Matches brute force rounding on all 24 orders of four patches | [`tests/test_merge.py`](tests/test_merge.py) |
-| Python and Go verifiers | Agree on 312 vectors and on mutated inputs from a differential fuzzer | [`fuzz/differential.py`](fuzz/differential.py) |
+| `edit`, Qwen3-0.6B, 200 unseen CounterFact cases | Efficacy 1.00, paraphrase 0.95, neighbours 0.70 (0.745 before) | [`bench/edit_counterfact.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/edit_counterfact.py) |
+| `diff`, planted edits, 50 trials each | 100% form recovery on 12 of 14 conditions, 0 false alarms in 250 noise trials | [`bench/forensics.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/forensics.py) |
+| `check`, real merges | PEFT 0.21.2 and mlx-lm 0.32.2 in fp32, bf16 and fp16, matched bit for bit | [`tests/test_check_real.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_check_real.py) |
+| `merge` | Matches brute force rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
+| Python and Go verifiers | Agree on 312 vectors and on mutated inputs from a differential fuzzer | [`fuzz/differential.py`](https://github.com/noah-thing/neyra-protocol/blob/main/fuzz/differential.py) |
 
 So far these edits rewrite facts and remove loops. None has been shown to add ability. ROME led `edit` on the 20
 development cases compared, and the full comparison is unfinished. Nothing has been tested above 1B parameters. The
-[limits page](docs/limits.md) has the rest.
+[limits page](https://github.com/noah-thing/neyra-protocol/blob/main/docs/limits.md) has the rest.
 
 ## Documentation
 
-Guides: [edit](docs/edit.md), [merge](docs/merge.md), [bisect](docs/bisect.md), [check](docs/check.md), [hop](docs/hop.md), [identity](docs/identity.md), [signing](docs/signing.md), [lab](docs/lab.md).
+Guides: [edit](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md), [merge](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md), [bisect](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md), [check](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md), [hop](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md), [identity](https://github.com/noah-thing/neyra-protocol/blob/main/docs/identity.md), [signing](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), [lab](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md).
 
-Reference: [specification](spec/PROTOCOL.md), [protocol notes](docs/protocol.md), [vectors](spec/vectors), [accuracy](docs/accuracy.md), [limits](docs/limits.md), [prior work](docs/prior-work.md), [changelog](CHANGELOG.md).
+Reference: [specification](https://github.com/noah-thing/neyra-protocol/blob/main/spec/PROTOCOL.md), [protocol notes](https://github.com/noah-thing/neyra-protocol/blob/main/docs/protocol.md), [vectors](https://github.com/noah-thing/neyra-protocol/blob/main/spec/vectors), [accuracy](https://github.com/noah-thing/neyra-protocol/blob/main/docs/accuracy.md), [limits](https://github.com/noah-thing/neyra-protocol/blob/main/docs/limits.md), [prior work](https://github.com/noah-thing/neyra-protocol/blob/main/docs/prior-work.md), [changelog](https://github.com/noah-thing/neyra-protocol/blob/main/CHANGELOG.md).
 
 ## Status
 
-Early. Formats can change until v1, and Neyra is not on PyPI yet.
+Early. Formats can change until v1.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it and [SECURITY.md](SECURITY.md) to report a vulnerability. If you
+See [CONTRIBUTING.md](https://github.com/noah-thing/neyra-protocol/blob/main/CONTRIBUTING.md) to work on it and [SECURITY.md](https://github.com/noah-thing/neyra-protocol/blob/main/SECURITY.md) to report a vulnerability. If you
 write a verifier from the spec and vectors, open an issue. The Go one here shares an author with the Python one.
 
 ## License
 
-[Apache 2.0](LICENSE)
+[Apache 2.0](https://github.com/noah-thing/neyra-protocol/blob/main/LICENSE)
