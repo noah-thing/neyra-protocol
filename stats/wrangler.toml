@@ -10,7 +10,7 @@ enabled = false
 [[d1_databases]]
 binding = "DB"
 database_name = "neyra-stats"
-database_id = "FILL_IN_AFTER_wrangler_d1_create"
+database_id = "e967af73-0253-4e03-b44a-4a12ce93b631"
 
 # Needs the Workers rate limiting binding. Check that the free plan includes it before deploying.
 [[ratelimits]]

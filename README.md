@@ -168,6 +168,8 @@ Reference: [specification](https://github.com/noah-thing/neyra-protocol/blob/mai
 
 Early. Formats can change until v1.
 
+Neyra can send anonymous usage stats if you say yes when asked; [the stats page](https://github.com/noah-thing/neyra-protocol/blob/main/docs/stats.md) lists what is sent and how to turn it off.
+
 See [CONTRIBUTING.md](https://github.com/noah-thing/neyra-protocol/blob/main/CONTRIBUTING.md) to work on it and [SECURITY.md](https://github.com/noah-thing/neyra-protocol/blob/main/SECURITY.md) to report a vulnerability. If you
 write a verifier from the spec and vectors, open an issue. The Go one here shares an author with the Python one.
 

@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 from .. import __version__
 
-ENDPOINT = ""  # set to the receiver's https URL to turn the prompt on
+ENDPOINT = "https://neyra-stats.opencursor.workers.dev/v1/report"  # set to the receiver's https URL to turn the prompt on
 TIMEOUT = 3.0
 SCHEMA = 1
 
