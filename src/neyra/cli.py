@@ -340,6 +340,24 @@ def cmd_hop(a) -> int:
     return OK if verdict.ok else FINDINGS
 
 
+def cmd_tune_lint(a) -> int:
+    from .tune import report
+    from .tune.lint import lint
+    from .tune.tok import TokenizerError
+    from .tune.trainers import Unsupported
+
+    try:
+        r = lint(a.data, a.model, a.trainer, a.gguf, a.val, a.max_length, a.mask_prompt, a.show)
+    except (Unsupported, TokenizerError) as e:
+        raise Fail(BAD_INPUT, str(e)) from e
+    except ModuleNotFoundError as e:
+        if (e.name or "").split(".")[0] not in ("transformers", "tokenizers", "jinja2"):
+            raise
+        raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[tune]'") from e
+    emit(a, report.document(r), report.render(r))
+    return FINDINGS if r.errors else OK
+
+
 def cmd_forecast(a) -> int:
     from .hop import FineTune
     from .survival import forecast
@@ -1293,6 +1311,21 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
 
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
+
+    tune = command("tune", None, "check a fine-tuning run before it starts")
+    tune_sub = tune.add_subparsers(dest="tune_cmd", required=True)
+    p = tune_sub.add_parser("lint", help="the token ids and loss mask a trainer will build from your data, and what is wrong with them",
+                            parents=[common])
+    p.set_defaults(fn=cmd_tune_lint)
+    p.add_argument("data", help="a jsonl file: messages, prompt and completion, text, alpaca or sharegpt rows")
+    p.add_argument("model", help="a model folder or Hugging Face repo; only tokenizer and config files are read")
+    p.add_argument("--trainer", default="trl", choices=["trl", "unsloth", "axolotl", "mlx", "llama-factory"])
+    p.add_argument("--gguf", metavar="FILE", help="compare the chat template and tokenizer with this GGUF file")
+    p.add_argument("--val", metavar="FILE", help="a validation jsonl, checked for rows that also appear in DATA")
+    p.add_argument("--max-length", type=int, metavar="N", help="the trainer's sequence length (default: its own default)")
+    p.add_argument("--mask-prompt", action=argparse.BooleanOptionalAction, default=None,
+                   help="whether the loss skips the prompt (default: what the trainer does out of the box)")
+    p.add_argument("--show", type=int, default=0, metavar="N", help="print the first N rows with trained tokens marked")
 
     command("doctor", cmd_doctor, "check this machine and what it can run")
     return ap
