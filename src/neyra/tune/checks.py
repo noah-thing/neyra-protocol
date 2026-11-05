@@ -227,21 +227,21 @@ class Rows:
             f"The last tokens are not {eos or 'an end of turn token'} or the template's end of turn. Add it to the data, "
             "or use a trainer path that appends it.")
         add("end_masked", level(t["end_masked"].count / max(N, 1)), "end token not trained",
-            f"{plural(t['end_masked'].count, 'row')} have the end token masked out of the loss",
+            f"{plural(t['end_masked'].count, 'row')} {'has' if t['end_masked'].count == 1 else 'have'} the end token masked out of the loss",
             "The end token is in the row but its label is ignored, so the loss never asks the model to stop.", approximate=approx)
         add("empty", level(t["empty"].count / max(N, 1)), "empty loss",
-            f"{plural(t['empty'].count, 'row')} have no token in the loss",
+            f"{plural(t['empty'].count, 'row')} {'has' if t['empty'].count == 1 else 'have'} no token in the loss",
             "Nothing in these rows is trained on: the mask covers no tokens, or truncation cut them all.", approximate=approx)
         if tr.truncation == "drop":
             add("dropped", "warning", "rows dropped for length",
-                f"{plural(t['dropped'].count, 'row')} are longer than {tr.length_name} {self.limit} and will be dropped",
+                f"{plural(t['dropped'].count, 'row')} {'is' if t['dropped'].count == 1 else 'are'} longer than {tr.length_name} {self.limit} and will be dropped",
                 f"{self.cut_tokens / max(self.tokens, 1):.1%} of all tokens are in dropped rows. "
                 f"Raise {tr.length_name} or shorten them.")
         else:
             lost = t["end_lost"].count
             share = self.cut_tokens / max(self.tokens, 1)
             add("truncated", "error" if lost / max(N, 1) >= HARD else "warning", "truncated",
-                f"{plural(t['truncated'].count, 'row')} are longer than {tr.length_name} {self.limit}; "
+                f"{plural(t['truncated'].count, 'row')} {'is' if t['truncated'].count == 1 else 'are'} longer than {tr.length_name} {self.limit}; "
                 f"{plural(lost, 'answer')} lose{'s' * (lost == 1)} their end, {share:.1%} of tokens are cut",
                 f"Raise {tr.length_name}, or shorten these rows. A cut answer ends mid sentence with no end token.",
                 count=t["truncated"].count, approximate=tr.name == "llama-factory")
@@ -270,7 +270,7 @@ class Rows:
             "Rendering the question with add_generation_prompt gives different text from the start of the full "
             "conversation, so training and inference see different contexts.")
         add("think", level(t["think"].count / max(N, 1)), "thinking removed",
-            f"{plural(t['think'].count, 'row')} have a reasoning block in the answer that the template drops",
+            f"{plural(t['think'].count, 'row')} {'has' if t['think'].count == 1 else 'have'} a reasoning block in the answer that the template drops",
             "The chat template removes the thinking from the training text, so the model trains on answers without it. "
             "Move it to reasoning_content, or use a template that keeps it.")
         add("system", level(t["system"].count / max(N, 1), 0.05), "system prompt in answers",
