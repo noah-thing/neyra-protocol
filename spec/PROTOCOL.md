@@ -488,8 +488,9 @@ A file entry is `{path, sha256}`: `path` relative to the model directory with `/
 sorted by path component by component, comparing code points, as OMS orders them, with no repeats. So `a/b`
 comes before `a.txt`.
 
-The files of a directory are its regular files at any depth, except those whose path begins with one of
-`.git`, `.gitattributes`, `.github`, `.gitignore`, or an `ignore` path of the statement. A symbolic link makes
+The files of a directory are its regular files at any depth, except a path equal to one of `.git`,
+`.gitattributes`, `.github`, `.gitignore` or an `ignore` path of the statement, or below one followed by `/`.
+A sibling that only shares leading characters stays listed. A symbolic link makes
 the directory unlistable. `oms_root(files)` is the hex of the SHA-256 over the raw 32 byte file digests,
 concatenated in that order. For the same files OMS 1.1.1 writes this value as the subject digest of its
 statement, and the same file digests as `predicate.resources`.
