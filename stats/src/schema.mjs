@@ -21,8 +21,8 @@ export const SPEC = {
   kinds: {
     verdict: {
       backend: ["torch", "mlx", "other"], family: FAMILIES, size: SIZES,
-      verdict: ["worked", "worked_with_damage", "lost_in_quantization", "prompt_enough", "prompt_better",
-        "did_not_work", "worse_than_base", "cannot_tell"],
+      verdict: ["worked", "worked_with_damage", "not_tested", "lost_in_quantization", "prompt_enough",
+        "prompt_better", "did_not_work", "worse_than_base", "cannot_tell"],
       cases: ["10-29", "30-49", "50-99", "100-199", "200+"], gain_over_base: "gain", gain_over_prompt: "gain",
       quants: { list: { max: 8, key: "format", item: { format: FORMATS, held: "bool" } } },
     },

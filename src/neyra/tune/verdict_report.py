@@ -63,7 +63,7 @@ def document(r: Result) -> dict:
         "command": "tune verdict",
         "verdict": r.verdict,
         "sentence": r.sentence,
-        "tuned_beat_best_free_option": r.passed,
+        "tuned_beat_best_free_option": r.verdict in ("worked", "worked_with_damage", "not_tested"),
         "cases": {"n": r.n, "path": r.cases_path, "scorer": r.scorer, "ids": r.case_ids},
         "margin": r.margin,
         "shots": r.shots,

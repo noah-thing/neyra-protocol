@@ -9,8 +9,8 @@ neyra tune verdict BASE ADAPTER cases.jsonl --examples train.jsonl --json --save
 
 Run it after a fine-tune. It answers two questions on your own held-out cases: did the tune help, and could a prompt
 have done the same. Install the extra with `uv tool install 'neyra[torch,tune]'`. Quantized files need llama.cpp's
-`llama-server` on the PATH (or in `NEYRA_LLAMA_SERVER`). Without it the files are listed as not run, and the rest of
-the report is unaffected.
+`llama-server` on the PATH (or in `NEYRA_LLAMA_SERVER`). Without it the files are listed as not run, the first line
+says so, and the exit code is 1.
 
 ## Input
 
@@ -61,7 +61,8 @@ One sentence, chosen in this order:
 5. It beats both and survives every file: **this worked**. If the general check below shows a drop it says so in the
    same sentence.
 
-Exit code 0 means the tuned model, and every quantized file given, beat both free arms. Otherwise it is 1. Bad input is 3.
+Exit code 0 means the tuned model and every quantized file given beat both free arms, and the general check found no
+drop. A file that could not run counts against it: nothing was measured. Otherwise it is 1. Bad input is 3.
 
 ## Damage
 

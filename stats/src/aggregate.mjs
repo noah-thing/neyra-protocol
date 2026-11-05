@@ -1,7 +1,7 @@
 // The numbers the website shows. Input rows are groups of identical reports with a count `n`.
 // Everything is computed from the validated, coarse fields; medians are medians of buckets of 5 points.
 export const MIN_GROUP = 5;
-const BEAT = ["worked", "worked_with_damage", "lost_in_quantization"]; // the tune beat the base and the prompt
+const BEAT = ["worked", "worked_with_damage", "not_tested", "lost_in_quantization"]; // the tune beat the base and the prompt
 const PROMPT_ENOUGH = ["prompt_enough", "prompt_better"]; // a prompt did the job
 
 const sum = (rows, pred = () => true) => rows.filter(pred).reduce((s, r) => s + r.n, 0);

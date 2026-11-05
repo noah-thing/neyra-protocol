@@ -107,8 +107,9 @@ def test_a_file_that_cannot_run_is_reported_and_the_rest_goes_on():
     b = backends(0.4, 0.5, 0.9, {"Q8_0": 0.9})
     b.generate["Q4_K_M"] = broken
     r = go(b)
-    assert r.verdict == "worked" and r.skipped == [("Q4_K_M", "llama-server exited with 1 on a.gguf")]
-    assert "Q4_K_M" not in r.arms
+    assert r.verdict == "not_tested" and not r.passed
+    assert r.skipped == [("Q4_K_M", "llama-server exited with 1 on a.gguf")]
+    assert "Q4_K_M" not in r.arms and "Q4_K_M did not run" in r.sentence
 
 
 def test_gain_kept_in_every_file():
@@ -129,7 +130,7 @@ def test_fewer_than_ten_cases_is_refused():
 
 def test_damage_to_general_answers_is_reported_beside_a_real_gain():
     r = go(backends(0.4, 0.5, 0.9, tuned_general=0.2))
-    assert r.verdict == "worked_with_damage" and r.passed
+    assert r.verdict == "worked_with_damage" and not r.passed
     assert r.general["kind"] == "worse" and r.general["got_worse"]
 
 

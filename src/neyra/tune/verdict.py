@@ -153,7 +153,7 @@ def decide(arms: dict[str, np.ndarray], quants: list[str], n: int, margin: float
     if quants:
         lead += f" The quantized files tested ({', '.join(quants)}) keep it."
     if damaged:
-        return ("worked_with_damage", f"{lead} Check this before shipping: {damaged}", True, cmps)
+        return ("worked_with_damage", f"{lead} Check this before shipping: {damaged}", False, cmps)
     return "worked", lead, True, cmps
 
 
@@ -213,8 +213,11 @@ def run(cases: list[Case], backends: Backends, fmt: Format, score_fn, scorer_nam
         damaged = (f"the tuned model answers {pct(gt.mean())} of {len(qcases)} general questions against "
                    f"{pct(gb.mean())} for the base; {len(qcases)} questions are too few to be sure it is a real drop.")
 
-    res_decision = decide(arms, quants, n, margin, len(examples), damaged)
-    verdict, sentence, passed, cmps = res_decision
+    verdict, sentence, passed, cmps = decide(arms, quants, n, margin, len(examples), damaged)
+    if backends.skipped and verdict in ("worked", "worked_with_damage"):
+        files = ", ".join(q for q, _ in backends.skipped)
+        verdict, passed = "not_tested", False
+        sentence += f" {files} did not run, so this says nothing about those files."
     worse = [{"id": c.id, "input": c.input[:160], "expected": c.output, "base": outputs["base"][i],
               "tuned": outputs["tuned"][i]}
              for i, c in enumerate(cases) if arms["base"][i] > arms["tuned"][i]]
