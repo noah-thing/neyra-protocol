@@ -177,6 +177,28 @@ def _chat_template(c: Checkpoint) -> str | None:
     return None
 
 
+# Flags the tokenizer reads at run time. A different BOS or EOS setting changes every prompt, with no weights involved.
+TOKEN_FLAGS = ("add_bos_token", "add_eos_token", "bos_token", "eos_token", "pad_token", "unk_token", "legacy",
+               "clean_up_tokenization_spaces", "add_prefix_space", "tokenizer_class", "model_max_length")
+
+
+def _token_text(value):
+    return value.get("content") if isinstance(value, dict) else value
+
+
+def inspect_tokenizer_config(a: Checkpoint, b: Checkpoint) -> list[Finding]:
+    ca, cb = a.text("tokenizer_config.json"), b.text("tokenizer_config.json")
+    if ca is None or cb is None:
+        return []
+    ja, jb = json.loads(ca), json.loads(cb)
+    out = []
+    for key in TOKEN_FLAGS:
+        x, y = _token_text(ja.get(key)), _token_text(jb.get(key))
+        if key in ja and key in jb and x != y or (key in ja) != (key in jb) and key.startswith(("add_", "bos", "eos")):
+            out.append(Finding("medium", "tokenizer setting", f"{key}: {x!r} -> {y!r}"))
+    return out
+
+
 def inspect_artifacts(a: Checkpoint, b: Checkpoint) -> list[Finding]:
     out = []
     ta, tb = _chat_template(a), _chat_template(b)
@@ -205,7 +227,9 @@ def inspect_artifacts(a: Checkpoint, b: Checkpoint) -> list[Finding]:
     risky = [f for f in new if EXECUTABLE.search(f)]
     if risky:
         out.append(Finding("high", "new executable or pickle files", ", ".join(risky[:20])))
-    for path in ("tokenizer.json", "special_tokens_map.json", "added_tokens.json", "vocab.json", "merges.txt"):
+    out += inspect_tokenizer_config(a, b)
+    for path in ("tokenizer.json", "tokenizer.model", "special_tokens_map.json", "added_tokens.json", "vocab.json",
+                 "merges.txt"):
         ra, rb = a.raw(path), b.raw(path)
         if ra is not None and rb is not None and ra != rb:
             out.append(Finding("medium", "tokenizer", f"{path} differs"))

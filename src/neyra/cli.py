@@ -30,6 +30,9 @@ from .check import (
 from .clock import check_claim, make_claim
 from .conformance import check_binding, check_patch
 from .diff import Report, compare
+from .hop import document as hop_document
+from .hop import render as hop_render
+from .hop import trace
 from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
 from .merge import merge
@@ -238,6 +241,34 @@ def cmd_check(a) -> int:
              "adapter_modules": c.modules, "added": c.added, "leftover_adapter_tensors": c.leftover,
              "tensors": [vars(t) for t in c.tensors]}, render_check(c, base, merged, adapter))
     return OK if c.equivalent else FINDINGS
+
+
+def cmd_hop(a) -> int:
+    if a.predict:
+        return cmd_forecast(a)
+    verdict = trace(a.artifacts, a.ulps)
+    emit(a, hop_document(verdict), hop_render(verdict))
+    return OK if verdict.ok else FINDINGS
+
+
+def cmd_forecast(a) -> int:
+    from .hop import FineTune
+    from .survival import forecast
+
+    if len(a.artifacts) != 2:
+        raise Fail(USAGE, "--predict takes the base and the adapter")
+    base, adapter = Checkpoint.open(a.artifacts[0]), Checkpoint.open(a.artifacts[1])
+    kinds = [k.upper() for k in a.predict.split(",")]
+    pools = forecast(base, FineTune(base, adapter), kinds)
+    text, rows = ["share of the adapter's change that is stored, by type (K-quants cannot be forecast here):"], {}
+    for kind, pool in pools.items():
+        if pool.value is None:
+            text.append(f"  {kind:<8}cannot be forecast, gguf-py cannot quantize it")
+            continue
+        rows[kind] = {"survival": pool.value, "error": pool.error, "cosine": pool.cosine}
+        text.append(f"  {kind:<8}{pool.value:.0%} (+/-{2 * pool.error:.0%}), cosine {pool.cosine:.2f}")
+    emit(a, {"forecast": rows}, "\n".join(text))
+    return OK
 
 
 def cmd_show(a) -> int:
@@ -894,6 +925,11 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("merged")
     p.add_argument("--adapter", help="PEFT LoRA adapter directory that was merged into the base")
     p.add_argument("--ulps", type=int, default=1, help="steps of the dtype two tensors may differ by and still count as rounding")
+
+    p = command("hop", cmd_hop, "find the first hop that lost a fine-tune: base, adapter, merged model, GGUF")
+    p.add_argument("artifacts", nargs="+", metavar="ARTIFACT", help="base, then the adapter if any, then each later artifact in order")
+    p.add_argument("--ulps", type=int, default=1, help="steps of the dtype two tensors may differ by and still count as rounding")
+    p.add_argument("--predict", metavar="TYPES", help="with a base and an adapter: forecast survival in these GGUF types, e.g. q8_0,q4_0")
 
     p = command("show", cmd_show, "describe a patch")
     p.add_argument("patch")

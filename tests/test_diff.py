@@ -70,3 +70,22 @@ def test_unpaired_tensors_are_reported_not_silently_skipped(model_dir, rng):
     b = model_dir("b", {"y.gamma": w, "x.beta": w})
     r = compare(Checkpoint.open(str(a)), Checkpoint.open(str(b)))
     assert any(f.kind == "partial comparison" for f in r.findings)
+
+
+def test_diff_reports_bos_eos_and_sentencepiece_changes(model_dir):
+    import json
+
+    from neyra.diff import inspect_artifacts
+    from neyra.store import Checkpoint
+
+    w = {"w": bf16(np.ones((2, 2)))}
+    cfg = {"add_bos_token": False, "bos_token": "<s>", "eos_token": "</s>"}
+    a = model_dir("tok_a", w, {"tokenizer_config.json": json.dumps(cfg), "tokenizer.model": "v1"})
+    b = model_dir("tok_b", w, {"tokenizer_config.json": json.dumps({**cfg, "add_bos_token": True, "eos_token": "<|im_end|>"}),
+                               "tokenizer.model": "v2"})
+    found = {(f.kind, f.detail) for f in inspect_artifacts(Checkpoint.open(str(a)), Checkpoint.open(str(b)))}
+    assert ("tokenizer setting", "add_bos_token: False -> True") in found
+    assert ("tokenizer setting", "eos_token: '</s>' -> '<|im_end|>'") in found
+    assert ("tokenizer", "tokenizer.model differs") in found
+    same = inspect_artifacts(Checkpoint.open(str(a)), Checkpoint.open(str(a)))
+    assert not same
