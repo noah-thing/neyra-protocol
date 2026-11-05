@@ -240,7 +240,7 @@ def test_stats_commands(env, capsys):
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_the_receiver_accepts_what_the_client_builds_and_agrees_on_the_spec():
-    code = (f"import {{SPEC, validate}} from '{REPO}/stats/src/schema.mjs';"
+    code = (f"import {{SPEC, validate}} from '{(REPO / 'stats/src/schema.mjs').as_uri()}';"
             "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{"
             "console.log(JSON.stringify({spec:SPEC,ok:JSON.parse(s).map(p=>validate(p)!==null)}))})")
     out = subprocess.run(["node", "--input-type=module", "-e", code], input=json.dumps(payloads()),
