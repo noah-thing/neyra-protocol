@@ -15,7 +15,16 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
-from .check import DIFFERENT, EQUIVALENT, IDENTICAL, MISSING, NEVER_APPLIED, ROUNDING, check
+from .check import (
+    DIFFERENT,
+    EQUIVALENT,
+    IDENTICAL,
+    MERGED,
+    MISSING,
+    NEVER_APPLIED,
+    ROUNDING,
+    check,
+)
 from .clock import check_claim, make_claim
 from .conformance import check_binding
 from .diff import Report, compare
@@ -171,12 +180,23 @@ def cmd_check(a) -> int:
     base, merged = Checkpoint.open(a.base), Checkpoint.open(a.merged)
     adapter = Checkpoint.open(a.adapter) if a.adapter else None
     c = check(base, merged, adapter, a.ulps)
-    counts = {s: c.count(s) for s in (IDENTICAL, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
+    counts = {s: c.count(s) for s in (IDENTICAL, MERGED, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
     text = [f"base    {base.spec}", f"merged  {merged.spec}"]
     if adapter:
         text.append(f"adapter {adapter.spec}, {c.modules} modules")
-    text.append(f"{len(c.tensors)} tensors: {counts[IDENTICAL]} identical, {counts[ROUNDING]} equal under rounding, "
-                f"{counts[DIFFERENT]} different, {counts[MISSING]} missing, {counts[NEVER_APPLIED]} never applied")
+    text.append(f"{len(c.tensors)} tensors: {counts[IDENTICAL]} identical, {counts[MERGED]} merged exactly, "
+                f"{counts[ROUNDING]} equal under rounding, {counts[DIFFERENT]} different, {counts[MISSING]} missing, "
+                f"{counts[NEVER_APPLIED]} never applied")
+    if c.recast:
+        text.append("the merged model is stored in " + ", ".join(f"{b} where the base is {a}" for a, b in sorted(c.recast))
+                    + "; the base was converted before the merge was recomputed")
+    if c.paths:
+        text.append(f"every edited tensor is what {', '.join(c.paths)} produces")
+    elif counts[MERGED]:
+        text.append("no single path produces every edited tensor")
+    if c.faint:
+        text.append(f"\nthe merge is correct, but rounding kept under half of the delta in {len(c.faint)} of "
+                    f"{c.targeted} edited tensors, {min(t.applied for t in c.faint):.0%} at worst")
     if c.targeted and counts[NEVER_APPLIED] == c.targeted:
         text.append(f"\nTHE ADAPTER WAS NEVER APPLIED: every tensor it edits ({c.targeted}) equals the base, "
                     "though the adapter changes them")
@@ -186,7 +206,7 @@ def cmd_check(a) -> int:
         text.append(f"\nthe merged file still holds {len(c.leftover)} separate adapter tensors, such as {c.leftover[0]}")
     if c.added:
         text.append(f"\n{len(c.added)} tensors are only in the merged model, such as {c.added[0]}")
-    shown = [t for t in c.tensors if t.status != IDENTICAL or t.detail]
+    shown = [t for t in c.tensors if t.status not in (IDENTICAL, MERGED) or (t.detail and t.status != MERGED)]
     text += [""] if shown else []
     for t in shown[:30]:
         share = "" if t.applied is None or t.status in EQUIVALENT else f", {t.applied:.0%} of the delta present"
@@ -195,7 +215,8 @@ def cmd_check(a) -> int:
         text.append(f"... and {len(shown) - 30} more")
     text.append("\n" + ("equivalent" if c.equivalent else "NOT equivalent"))
     emit(a, {"base": base.spec, "merged": merged.spec, "adapter": adapter.spec if adapter else None,
-             "equivalent": c.equivalent, "counts": counts, "adapter_tensors": c.targeted,
+             "equivalent": c.equivalent, "paths": c.paths, "recast": sorted(c.recast), "counts": counts,
+             "faint": [t.name for t in c.faint], "adapter_tensors": c.targeted,
              "adapter_modules": c.modules, "added": c.added, "leftover_adapter_tensors": c.leftover,
              "tensors": [vars(t) for t in c.tensors]}, "\n".join(text))
     return OK if c.equivalent else FINDINGS
