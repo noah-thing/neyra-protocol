@@ -361,6 +361,54 @@ def cmd_tune_lint(a) -> int:
     return FINDINGS if r.errors else OK
 
 
+def cmd_tune_verdict(a) -> int:
+    from .tune import cases as cases_mod
+    from .tune import prompts, verdict, verdict_report
+    from .tune.engines import EngineError, open_backends
+
+    try:
+        cases = cases_mod.read(a.cases)
+        score_fn = cases_mod.scorer(a.scorer)
+        pool = cases_mod.read(a.examples)
+        seen = {c.input for c in cases}
+        usable = [c for c in pool if c.input not in seen]
+        if not usable:
+            raise cases_mod.CaseError(f"every example in {a.examples} is also one of the cases")
+        shots = cases_mod.examples(usable, a.shots, a.seed)
+        chat = {"chat": True, "plain": False}.get(a.format)
+        template = a.template.replace("\\n", "\n")
+        stop = tuple(s.replace("\\n", "\n") for s in a.stop)
+    except cases_mod.CaseError as e:
+        raise Fail(BAD_INPUT, str(e)) from e
+    try:
+        backends = open_backends(a.base, a.tuned, a.gguf, a.max_tokens, a.threads)
+    except EngineError as e:
+        raise Fail(BAD_INPUT, str(e)) from e
+    except ModuleNotFoundError as e:
+        if (e.name or "").split(".")[0] not in ("transformers", "tokenizers", "jinja2", "torch"):
+            raise
+        raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[torch,tune]'") from e
+    try:
+        if chat is None:
+            chat = backends.has_chat_template
+        fmt = prompts.Format(chat, template, stop if stop or chat else ("\n",), a.system)
+        say = (lambda m: None) if a.json else (lambda m: print(m, file=sys.stderr))
+        r = verdict.run(cases, backends, fmt, score_fn, a.scorer, shots, a.margin, a.cases, quants=None, say=say)
+    except cases_mod.CaseError as e:
+        raise Fail(BAD_INPUT, str(e)) from e
+    finally:
+        backends.close()
+    if len(usable) < len(pool):
+        r.warnings.append(f"{len(pool) - len(usable)} examples were dropped because they are also test cases")
+    if len(shots) < a.shots:
+        r.warnings.append(f"only {len(shots)} examples were available, so the prompt has {len(shots)}")
+    doc = verdict_report.document(r)
+    if a.save:
+        Path(a.save).write_text(json.dumps({"schema": SCHEMA, **doc}, indent=2))
+    emit(a, doc, verdict_report.render(r))
+    return OK if r.passed else FINDINGS
+
+
 def cmd_forecast(a) -> int:
     from .hop import FineTune
     from .survival import forecast
@@ -1315,7 +1363,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
 
-    tune = command("tune", None, "check a fine-tuning run before it starts")
+    tune = command("tune", None, "check a fine-tuning run before it starts and judge it afterwards")
     tune_sub = tune.add_subparsers(dest="tune_cmd", required=True)
     p = tune_sub.add_parser("lint", help="the token ids and loss mask a trainer will build from your data, and what is wrong with them",
                             parents=[common])
@@ -1329,6 +1377,31 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--mask-prompt", action=argparse.BooleanOptionalAction, default=None,
                    help="whether the loss skips the prompt (default: what the trainer does out of the box)")
     p.add_argument("--show", type=int, default=0, metavar="N", help="print the first N rows with trained tokens marked")
+
+    p = tune_sub.add_parser("verdict", help="after fine-tuning: did it work, and did you need it, on your own cases",
+                            parents=[common])
+    p.set_defaults(fn=cmd_tune_verdict)
+    p.add_argument("base", help="the base model: a folder or Hugging Face repo")
+    p.add_argument("tuned", help="the tuned model: a PEFT or mlx-lm adapter folder, or a folder of merged weights")
+    p.add_argument("cases", help="a jsonl file of 30 to 200 held-out cases with an input and an expected output")
+    p.add_argument("--examples", required=True, metavar="FILE",
+                   help="a jsonl file the few-shot prompt takes its examples from, such as your training file")
+    p.add_argument("--gguf", nargs="+", default=[], metavar="FILE", help="quantized files of the tuned model to test too")
+    p.add_argument("--scorer", default="exact", help="exact, contains, regex:PATTERN or python:FILE (default: exact)")
+    p.add_argument("--shots", type=int, default=8, metavar="N", help="examples in the few-shot prompt (default: 8)")
+    p.add_argument("--seed", type=int, default=0, help="which examples the prompt gets")
+    p.add_argument("--format", default="auto", choices=["auto", "chat", "plain"],
+                   help="chat template or plain text prompts (default: chat when the tokenizer has a template)")
+    p.add_argument("--template", default="{input}", help="plain format only: how an input becomes a prompt, "
+                   "for example 'Q: {input}\\nA:'")
+    p.add_argument("--system", default="", help="a system prompt for cases that carry none")
+    p.add_argument("--stop", action="append", default=[], metavar="TEXT",
+                   help="cut every answer at this text (plain format defaults to a newline)")
+    p.add_argument("--max-tokens", type=int, default=32)
+    p.add_argument("--margin", type=float, default=0.05,
+                   help="two arms count as equal when the interval of their difference stays inside this (default: 0.05)")
+    p.add_argument("--threads", type=int, default=None, help="threads for llama-server")
+    p.add_argument("--save", metavar="FILE", help="also write the JSON document here, whatever the output format")
 
     command("doctor", cmd_doctor, "check this machine and what it can run")
     return ap

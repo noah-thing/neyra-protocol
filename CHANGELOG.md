@@ -8,6 +8,7 @@
 
 ## 0.2.2
 
+- `neyra tune verdict BASE TUNED CASES --examples FILE` scores the base, the base with a few-shot prompt, the tuned model (adapter or merged weights) and quantized GGUF files on your own cases, paired, with bootstrap intervals, then says in one sentence whether it worked, whether a prompt does the same, or whether the gain is lost in a file. It also reports a general question check, KL on neutral text and the cases that got worse. Exit 1 when the tuned model did not beat the best free option. Needs `neyra[torch,tune]`; quantized files need llama.cpp's `llama-server`.
 - `neyra tune lint DATA MODEL` builds the token ids and loss mask a fine-tuning trainer would use (TRL, mlx-lm, Unsloth, Axolotl, LLaMA-Factory) and reports BOS and end token problems, prompt text in the loss, truncation, template mismatches, duplicates and leakage. Needs `neyra[tune]`.
 - `neyra hop` checks Q4_K, Q5_K and Q6_K tensors against the interval each stored code allows instead of an error ceiling. A value outside it refutes the candidate; `docs/source.md` has the limits. Exact decoding of these types is checked bit for bit against llama.cpp by `bench/cells_vs_llamacpp.py`.
 - Removed `neyra.kquant`, a numpy Q4_K quantizer that did not reproduce llama.cpp's bytes.

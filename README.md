@@ -74,6 +74,7 @@ neyra check BASE MERGED --adapter ADAPTER     # recompute a LoRA merge and compa
 neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 
 neyra tune lint data.jsonl MODEL --trainer trl   # before training: tokens, loss mask, what is wrong
+neyra tune verdict BASE ADAPTER cases.jsonl --examples train.jsonl --gguf model-Q4_K_M.gguf   # after: did it work, did you need it
 ```
 
 ## Commands
@@ -95,6 +96,7 @@ neyra tune lint data.jsonl MODEL --trainer trl   # before training: tokens, loss
 | Command | |
 |---|---|
 | [`tune lint`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-lint.md) | Before fine-tuning: the token ids and loss mask TRL, mlx-lm, Unsloth, Axolotl or LLaMA-Factory would build from your jsonl, and what is wrong with them |
+| [`tune verdict`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md) | After fine-tuning: on your own cases, paired and with intervals, base, base with a few-shot prompt, the tuned model and its quantized files, and whether you needed to train at all |
 | [`diff`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/accuracy.md) | Compare two checkpoints and name the form of the change |
 | [`check`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md) | Recompute a merge per tool and compare bits |
 | [`hop`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md) | Report the first artifact that differs across base, adapter, merged model and GGUF |
@@ -156,7 +158,7 @@ development cases compared, and the full comparison is unfinished. Nothing has b
 
 ## Documentation
 
-Guides: [edit](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md), [merge](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md), [bisect](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md), [check](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md), [hop](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md), [identity](https://github.com/noah-thing/neyra-protocol/blob/main/docs/identity.md), [signing](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), [lab](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md), [tune lint](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-lint.md).
+Guides: [edit](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md), [merge](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md), [bisect](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md), [check](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md), [hop](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md), [identity](https://github.com/noah-thing/neyra-protocol/blob/main/docs/identity.md), [signing](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), [lab](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md), [tune lint](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-lint.md), [tune verdict](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md).
 
 Reference: [specification](https://github.com/noah-thing/neyra-protocol/blob/main/spec/PROTOCOL.md), [protocol notes](https://github.com/noah-thing/neyra-protocol/blob/main/docs/protocol.md), [vectors](https://github.com/noah-thing/neyra-protocol/blob/main/spec/vectors), [accuracy](https://github.com/noah-thing/neyra-protocol/blob/main/docs/accuracy.md), [limits](https://github.com/noah-thing/neyra-protocol/blob/main/docs/limits.md), [prior work](https://github.com/noah-thing/neyra-protocol/blob/main/docs/prior-work.md), [changelog](https://github.com/noah-thing/neyra-protocol/blob/main/CHANGELOG.md).
 
