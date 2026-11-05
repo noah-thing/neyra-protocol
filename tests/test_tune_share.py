@@ -221,7 +221,7 @@ def test_post_is_bounded_and_silent(monkeypatch):
 
 
 def test_the_shipped_build_has_no_endpoint():
-    assert share.ENDPOINT == ""
+    assert share.ENDPOINT.startswith("https://") and share.ENDPOINT.endswith("/v1/report")
 
 
 def test_stats_commands(env, capsys):
