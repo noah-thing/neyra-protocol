@@ -27,7 +27,7 @@ classifiers = [
 dependencies = ["numpy>=1.26", "cryptography>=42"]
 
 [project.optional-dependencies]
-mlx = ["mlx-lm>=0.32"]
+mlx = ["mlx-lm>=0.32; python_version >= '3.11' and sys_platform == 'darwin'"]
 torch = ["torch>=2.6", "transformers>=5.0", "accelerate"]
 mcp = ["mcp>=2.0"]
 gguf = ["gguf>=0.17"]

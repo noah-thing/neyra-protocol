@@ -2,6 +2,7 @@
 
 ## 0.3.1
 
+- `neyra[mlx]` resolves on every supported Python and platform. It installs mlx-lm on macOS with Python 3.11 or later, which is what mlx-lm supports.
 - `tune verdict` exits 1 when a requested GGUF did not run, with the new verdict `not_tested`, and when the general check finds damage. Both used to exit 0.
 - `hop` no longer fails a correct merge because rounding thinned a light adapter. That is now a note, as it is in `check`. It still fails when an edited tensor equals the base or when under half of the change survived overall.
 - The README leads with tuning, with a new tagline and a real `tune verdict` run at the top.

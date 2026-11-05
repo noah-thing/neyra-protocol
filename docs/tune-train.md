@@ -6,7 +6,7 @@ neyra tune train Qwen/Qwen3-0.6B data.jsonl -o run --iters 120 --rank 16 --val v
 ```
 
 One command on an Apple silicon Mac: lint the data, tune with mlx-lm's LoRA trainer, and keep the change as
-an exact Neyra patch. Install with `uv tool install 'neyra[tune,mlx]'`. Neyra has no training loop of its own; mlx-lm
+an exact Neyra patch. Install with `uv tool install 'neyra[tune,mlx]'`, on Python 3.11 or later. Neyra has no training loop of its own; mlx-lm
 trains and fuses, and Neyra checks what came out.
 
 ## What it does
