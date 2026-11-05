@@ -1,0 +1,1 @@
+sorts after docs/ by component

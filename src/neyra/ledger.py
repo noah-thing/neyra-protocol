@@ -52,6 +52,11 @@ def verify(path: Path) -> tuple[str, int]:
     return walk(entries)
 
 
+def tally(path: Path, kind: str) -> int:
+    """How many entries of a kind a ledger holds."""
+    return sum(e.get("kind") == kind for e in read_entries(path)[0])
+
+
 def walk(entries: list[dict]) -> tuple[str, int]:
     head = GENESIS
     for i, e in enumerate(entries):

@@ -32,7 +32,7 @@ torch = ["torch>=2.6", "transformers>=5.0", "accelerate"]
 mcp = ["mcp>=2.0"]
 gguf = ["gguf>=0.17"]
 eval = ["math-verify>=0.9"]
-dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0", "pyyaml"]
+dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0", "pyyaml", "jsonschema>=4", "referencing", "cryptography>=43"]
 
 [project.scripts]
 neyra = "neyra.cli:main"

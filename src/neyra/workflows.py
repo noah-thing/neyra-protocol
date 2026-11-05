@@ -22,10 +22,10 @@ from .edit import (
 )
 from .editeval import Limits, Neutral, fluency, judge, probe, statements, summary
 from .families import editable_warning
-from .ledger import Ledger
+from .ledger import Ledger, tally
 from .patch import Patch, diff_tensor
 from .probe import SelectivityProbe, loop_spans
-from .protocol import digest, envelope, jcs, plain, statement_for, tensor_table
+from .protocol import accounting, digest, envelope, jcs, plain, statement_for, tensor_table
 from .repair import Plan, Repair
 from .runtime import Sampling
 from .store import Checkpoint
@@ -211,6 +211,7 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
         "statements": [{"metric": m, "estimate": plain(p.difference), "ci_low": plain(p.low), "ci_high": plain(p.high),
                         "n": p.n, "method": "paired bootstrap"} for m, p in statements(before, after)],
         "gates": gates, "verdict": verdict, "limits": plain(asdict(limits)),
+        **accounting(tally(log.path, "edit_start"), "edit runs"),
         "edit": plain({"layers": layers, "settings": asdict(s), "before": b, "after": a,
                        "neutral_kl": report["neutral_kl"], "fluency": [quiet, loud],
                        "requests": [{"subject": r.subject, "prompt": r.prompt, "target": r.target, "true": r.true}

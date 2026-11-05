@@ -241,3 +241,14 @@ def test_bisect_says_what_it_measured(tmp_path, model_dir, rng):
     entry = next(e for e in read_jsonl(lab.root / "ledger.jsonl") if e["kind"] == "bisect")
     assert entry["body"]["blame"] == "insertion"
     assert lab.candidate(r["candidate"]).patch.meta["blame"] == "insertion"
+
+
+def test_receipt_counts_sessions_in_its_ledger_and_says_what_is_only_asserted(tmp_path, model_dir, rng):
+    lab, w, u = setup(tmp_path, model_dir, rng)
+    first = lab.submit(real_edit(lab, w, u, tmp_path))
+    assert first["attempts"] == {"counted": 1, "unit": "lab sessions",
+                                 "counted_in": "the ledger this receipt is bound to", "complete": False}
+    assert any("clock" in line for line in first["basis"]["asserted"])
+    assert any("applying patch_id" in line for line in first["basis"]["exact"])
+    again = Lab(lab.root, lab.ck.spec, lab.task, FakeRuntime(w, u), 10, 1)
+    assert again.submit(real_edit(again, w, u, tmp_path))["attempts"]["counted"] == 2

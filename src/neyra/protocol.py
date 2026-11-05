@@ -181,6 +181,27 @@ def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+RECEIPT_BASIS = {
+    "exact": ["result_root follows from applying patch_id to base_root",
+              "each ledger entry commits to the one before it"],
+    "asserted": ["statements, gates and verdict: the signer ran them and a reader cannot rerun them from the receipt",
+                 "the times in the ledger, which are the signer's own clock",
+                 "that the holdout was committed before anything was tuned against it",
+                 "attempts: the count below is the signer's own and can be too low"],
+}
+
+
+def accounting(counted: int, unit: str) -> dict:
+    """Informative claim members that say what a receipt shows and how many tries lie behind it.
+
+    The count is read from the ledger the receipt is bound to. A signer can start a fresh ledger for every try,
+    so the number is a floor, and `complete` is false whatever it says.
+    """
+    return {"attempts": {"counted": counted, "unit": unit, "counted_in": "the ledger this receipt is bound to",
+                         "complete": False},
+            "basis": RECEIPT_BASIS}
+
+
 def statement_for(claim: dict, patch_id: str, ledger_head: str, ledger_len: int) -> dict:
     return {
         "_type": STATEMENT_TYPE,
@@ -199,18 +220,39 @@ def pae(payload_type: str, payload: bytes) -> bytes:
     return b"DSSEv1 %d %s %d %s" % (len(t), t, len(payload), payload)
 
 
+def key_id(public: bytes) -> str:
+    """The keyid of a public key: 32 raw bytes for Ed25519, or the DER SubjectPublicKeyInfo of a P-256 key."""
+    return digest("key", public)
+
+
+def sign_pae(key: bytes, message: bytes) -> tuple[bytes, bytes]:
+    """Sign with a 32 byte Ed25519 seed or a DER PKCS8 P-256 key. Returns the public key and the signature."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        PublicFormat,
+        load_der_private_key,
+    )
+
+    if len(key) == 32:
+        private = Ed25519PrivateKey.from_private_bytes(key)
+        return private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw), private.sign(message)
+    private = load_der_private_key(key, None)
+    if not isinstance(private, ec.EllipticCurvePrivateKey) or private.curve.name != "secp256r1":
+        raise ValueError("signing keys are Ed25519 seeds or P-256 keys")
+    public = private.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+    return public, private.sign(message, ec.ECDSA(hashes.SHA256()))
+
+
 def envelope(statement: dict, key: bytes | None = None) -> dict:
     """A DSSE envelope. Without a key it is an unauthenticated record, and says so by being empty."""
     payload = jcs(statement)
     signatures = []
     if key is not None:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-
-        private = Ed25519PrivateKey.from_private_bytes(key)
-        public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
-        signatures.append({"keyid": digest("key", public),
-                           "sig": base64.b64encode(private.sign(pae(PAYLOAD_TYPE, payload))).decode()})
+        public, sig = sign_pae(key, pae(PAYLOAD_TYPE, payload))
+        signatures.append({"keyid": key_id(public), "sig": base64.b64encode(sig).decode()})
     return {"payloadType": PAYLOAD_TYPE, "payload": base64.b64encode(payload).decode(), "signatures": signatures}
 
 
@@ -247,20 +289,38 @@ def decode_envelope(doc) -> tuple[dict, bytes]:
     return statement, payload
 
 
-def check_signature(doc: dict, payload: bytes, public: bytes) -> None:
+def verifies(public: bytes, sig: bytes, message: bytes) -> bool:
+    """Ed25519 when the key is 32 raw bytes, otherwise ECDSA P-256 with SHA-256 and a DER signature."""
     from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from cryptography.hazmat.primitives.serialization import load_der_public_key
 
-    wanted = digest("key", public)
-    key = Ed25519PublicKey.from_public_bytes(public)
+    try:
+        if len(public) == 32:
+            Ed25519PublicKey.from_public_bytes(public).verify(sig, message)
+            return True
+        key = load_der_public_key(public)
+        if not isinstance(key, ec.EllipticCurvePublicKey) or key.curve.name != "secp256r1":
+            return False
+        key.verify(sig, message, ec.ECDSA(hashes.SHA256()))
+        return True
+    except (InvalidSignature, ValueError):
+        return False
+
+
+def check_signature(doc: dict, payload: bytes, public: bytes) -> None:
+    wanted = key_id(public)
     for s in doc["signatures"]:
         if s["keyid"] != wanted:
             continue
         try:
-            key.verify(strict_b64(s["sig"]), pae(PAYLOAD_TYPE, payload))
-            return
-        except (InvalidSignature, ValueError):
+            sig = strict_b64(s["sig"])
+        except ValueError:
             continue
+        if verifies(public, sig, pae(PAYLOAD_TYPE, payload)):
+            return
     raise ProtocolError("bad_signature", "no signature from this key verifies")
 
 
@@ -296,7 +356,52 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
     return Opened(statement, True)
 
 
-def new_key(path: str | Path) -> str:
+def read_private(path: str | Path) -> bytes:
+    """A signing key file: the hex seed `neyra keygen` writes, or a PEM P-256 key as `openssl ecparam` writes."""
+    text = Path(path).read_text().strip()
+    if not text.startswith("-----BEGIN"):
+        return bytes.fromhex(text)
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        load_pem_private_key,
+    )
+
+    return load_pem_private_key(text.encode(), None).private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
+
+
+def read_public(path: str | Path) -> bytes:
+    """A public key file: hex of the 32 byte key, or a PEM SubjectPublicKeyInfo."""
+    text = Path(path).read_text().strip()
+    if not text.startswith("-----BEGIN"):
+        return bytes.fromhex(text)
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        PublicFormat,
+        load_pem_public_key,
+    )
+
+    return load_pem_public_key(text.encode()).public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+
+
+def new_key(path: str | Path, algorithm: str = "ed25519") -> str:
+    if algorithm == "ecdsa-p256":
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.serialization import (
+            Encoding,
+            NoEncryption,
+            PrivateFormat,
+            PublicFormat,
+        )
+
+        private = ec.generate_private_key(ec.SECP256R1())
+        target = Path(path)
+        target.touch(mode=0o600)
+        target.write_bytes(private.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+        public = private.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+        target.with_suffix(".pub").write_bytes(public)
+        return key_id(private.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives.serialization import (
         Encoding,
@@ -312,4 +417,4 @@ def new_key(path: str | Path) -> str:
     target.touch(mode=0o600)
     target.write_text(raw.hex())
     target.with_suffix(".pub").write_text(public.hex())
-    return digest("key", public)
+    return key_id(public)

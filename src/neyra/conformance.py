@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import attest
 from .ledger import BrokenChain, entry_digest, read_entries
 from .ledger import verify as verify_ledger
 from .patch import (
@@ -21,7 +22,15 @@ from .patch import (
     PatchMismatch,
     payload_digest,
 )
-from .protocol import ProtocolError, jcs, open_envelope, root_of, strict_loads, tensor_table
+from .protocol import (
+    ProtocolError,
+    decode_envelope,
+    jcs,
+    open_envelope,
+    root_of,
+    strict_loads,
+    tensor_table,
+)
 from .rows import build_index, text, tree_root, verify_proof
 from .store import ITEMSIZE, Checkpoint, FormatError, LocalBlob, parse_header
 
@@ -36,6 +45,22 @@ def good_shape(value) -> bool:
 
 def good_digest(value) -> bool:
     return isinstance(value, str) and DIGEST.fullmatch(value) is not None
+
+
+def low_rank_shape(t: dict, requires: list) -> bool:
+    """Both factor digests or neither; only 2-D float tensors; and the extension must be named in `requires`."""
+    if ("left_digest" in t) != ("right_digest" in t):
+        return False
+    if "left_digest" not in t:
+        return True
+    return (good_digest(t["left_digest"]) and good_digest(t["right_digest"]) and len(t["shape"]) == 2
+            and t["dtype"] in ("BF16", "F16", "F32") and LOW_RANK in requires)
+
+
+def factors_fit(t: dict, left, right) -> bool:
+    rows, cols = t["shape"]
+    return (left.dtype == right.dtype == "F64" and len(left.shape) == len(right.shape) == 2
+            and left.shape[0] == rows and right.shape[1] == cols and left.shape[1] == right.shape[0] >= 1)
 
 
 def check_patch(path: str | Path, base: str | Path | None = None) -> str:
@@ -73,6 +98,8 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
     order = [t["name"].encode("utf-16-be", "surrogatepass") for t in entries]
     if order != sorted(set(order)):
         return "bad_manifest"
+    if not all(low_rank_shape(t, doc["requires"]) for t in entries):
+        return "bad_manifest"
     if set(doc["requires"]) - {LOW_RANK}:
         return "unknown_extension"
     expected = {f"{i}.{part}" for i, t in enumerate(entries) for part in
@@ -85,8 +112,13 @@ def check_patch(path: str | Path, base: str | Path | None = None) -> str:
             return "bad_manifest"
         if len(idx.shape) != 1 or idx.shape != val.shape:
             return "bad_manifest"
+        if "left_digest" in t and not factors_fit(t, refs[f"{i}.left"], refs[f"{i}.right"]):
+            return "bad_manifest"
     for i, t in enumerate(doc["tensors"]):
         if payload_digest(refs[f"{i}.idx"].read()) != t["idx_digest"] or payload_digest(refs[f"{i}.val"].read()) != t["val_digest"]:
+            return "payload_mismatch"
+        if "left_digest" in t and (payload_digest(refs[f"{i}.left"].read()) != t["left_digest"]
+                                   or payload_digest(refs[f"{i}.right"].read()) != t["right_digest"]):
             return "payload_mismatch"
     for i, t in enumerate(doc["tensors"]):
         flat = refs[f"{i}.idx"].read().view(np.int64)
@@ -152,6 +184,65 @@ def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) ->
     return "binding_mismatch"
 
 
+def check_transform(path: str | Path, public: bytes | None = None) -> str:
+    try:
+        attest.open_transformation(strict_loads(Path(path).read_text()), public)
+    except ProtocolError as e:
+        return e.code
+    return "ok"
+
+
+def check_status(path: str | Path, public: bytes | None = None) -> str:
+    try:
+        attest.open_status(strict_loads(Path(path).read_text()), public)
+    except ProtocolError as e:
+        return e.code
+    return "ok"
+
+
+def check_transform_binding(statement: str | Path, patch: str | Path) -> str:
+    code = check_transform(statement)
+    if code != "ok":
+        return code
+    code = check_patch(patch)
+    if code != "ok":
+        return code
+    opened = attest.open_transformation(strict_loads(Path(statement).read_text()))
+    return attest.bind_patch(opened.statement, Patch.load(patch))
+
+
+def check_transform_files(statement: str | Path, model: str | Path) -> str:
+    code = check_transform(statement)
+    if code != "ok":
+        return code
+    opened = attest.open_transformation(strict_loads(Path(statement).read_text()))
+    try:
+        return attest.bind_model(opened.statement, model)
+    except FormatError:
+        return "bad_safetensors"
+
+
+def open_any(path: str | Path) -> attest.Opened:
+    """A statement of either predicate type, verified alone."""
+    doc = strict_loads(Path(path).read_text())
+    kind = decode_envelope(doc)[0].get("predicateType")
+    if kind == attest.PREDICATE_TYPE:
+        return attest.open_transformation(doc)
+    opened = open_envelope(doc)
+    return attest.Opened(opened.statement, opened.signed, decode_envelope(doc)[1])
+
+
+def check_status_binding(status: str | Path, target: str | Path) -> str:
+    code = check_status(status)
+    if code != "ok":
+        return code
+    try:
+        found = open_any(target)
+    except ProtocolError as e:
+        return e.code
+    return attest.bind_target(attest.open_status(strict_loads(Path(status).read_text())), found)
+
+
 def check_rowproof(proof: str | Path, data: str | Path) -> str:
     try:
         verify_proof(strict_loads(Path(proof).read_bytes()), Path(data).read_bytes())
@@ -214,6 +305,15 @@ def _run(root: Path, case: dict):
             return {"code": "bad_safetensors"}
     if kind == "rowproof":
         return {"code": check_rowproof(root / case["proof"], root / case["data"])}
+    if kind in ("transform", "status"):
+        public = bytes.fromhex(case["public_hex"]) if case.get("public_hex") else None
+        return {"code": (check_transform if kind == "transform" else check_status)(root / case["file"], public)}
+    if kind == "transformbinding":
+        return {"code": check_transform_binding(root / case["statement"], root / case["patch"])}
+    if kind == "transformfiles":
+        return {"code": check_transform_files(root / case["statement"], root / case["model"])}
+    if kind == "statusbinding":
+        return {"code": check_status_binding(root / case["status"], root / case["target"])}
     if kind == "binding":
         return {"code": check_binding(root / case["receipt"], root / case["ledger"], root / case["patch"])}
     raise ValueError(f"unknown case kind {kind}")

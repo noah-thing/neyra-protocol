@@ -24,6 +24,9 @@ type vector struct {
 	Receipt   string
 	Ledger    string
 	Patch     string
+	Statement string
+	Status    string
+	Target    string
 	LeavesHex []string `json:"leaves_hex"`
 	Proof     string
 	Data      string
@@ -78,6 +81,21 @@ func run(dir string, v vector) (string, string) {
 		return string(codeOf(verifyRowProof(path(v.Proof), path(v.Data)))), ""
 	case "binding":
 		return string(codeOf(verifyBinding(path(v.Receipt), path(v.Ledger), path(v.Patch)))), ""
+	case "transform", "status":
+		var pub []byte
+		if v.PublicHex != "" {
+			pub = unhex(v.PublicHex)
+		}
+		if v.Kind == "status" {
+			return string(codeOf(verifyStatus(path(v.File), pub))), ""
+		}
+		return string(codeOf(verifyTransform(path(v.File), pub))), ""
+	case "transformbinding":
+		return string(codeOf(verifyTransformBinding(path(v.Statement), path(v.Patch)))), ""
+	case "transformfiles":
+		return string(codeOf(verifyTransformFiles(path(v.Statement), path(v.Model)))), ""
+	case "statusbinding":
+		return string(codeOf(verifyStatusBinding(path(v.Status), path(v.Target)))), ""
 	case "receipt":
 		var pub []byte
 		if v.PublicHex != "" {

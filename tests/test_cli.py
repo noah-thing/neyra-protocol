@@ -135,3 +135,10 @@ def test_demo_files_writes_models_that_check_can_use(tmp_path, capsys):
     assert main(["check", str(out / "base"), str(out / "merged"), "--adapter", str(out / "adapter")]) == 0
     assert main(["demo", "files", str(out)]) == 3
     assert main(["demo", "files"]) == 2
+
+
+def test_edit_exposes_the_clamp():
+    from neyra.cli import parser
+
+    args = parser().parse_args(["edit", "m", "r.json", "-o", "x", "--clamp", "30"])
+    assert args.clamp == 30.0 and parser().parse_args(["edit", "m", "r.json", "-o", "x"]).clamp is None

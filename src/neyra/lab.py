@@ -24,11 +24,21 @@ import numpy as np
 from . import __version__
 from .behavior import score
 from .bisect import BLAME, Measure, bisect, confirm
-from .ledger import Ledger
+from .ledger import Ledger, tally
 from .numerics import from_float, is_float, to_float
 from .patch import Patch, TensorEdit, diff_tensor
 from .probe import SelectivityProbe, Span, loop_spans
-from .protocol import decimal, digest, envelope, jcs, plain, root_of, statement_for, tensor_table
+from .protocol import (
+    accounting,
+    decimal,
+    digest,
+    envelope,
+    jcs,
+    plain,
+    root_of,
+    statement_for,
+    tensor_table,
+)
 from .recover import recover
 from .repair import Layer, Plan, Repair, down_proj_name, matched_random, project_columns
 from .runtime import Sampling
@@ -508,6 +518,7 @@ class Lab:
             + [statement(f"versus {n}", Paired(**v)) for n, v in alternatives.items()],
             "drift": plain(drift), "gates": gates, "verdict": verdict,
             "limits": {"passes_used": self.used, "passes": self.passes, "submissions": self.allowed},
+            **accounting(tally(self.ledger.path, "open"), "lab sessions"),
         }
         head = self.ledger.append("submit", candidate=candidate, verdict=verdict, gates=gates, patch_id=c.patch.id)
         signed = envelope(statement_for(claim, c.patch.id, head, self.ledger.count), self.key)

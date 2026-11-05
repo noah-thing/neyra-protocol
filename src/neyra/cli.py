@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
+from . import attest as at
 from .check import (
     DIFFERENT,
     EQUIVALENT,
@@ -27,14 +28,25 @@ from .check import (
     check,
 )
 from .clock import check_claim, make_claim
-from .conformance import check_binding
+from .conformance import check_binding, check_patch
 from .diff import Report, compare
 from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
 from .merge import merge
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
-from .protocol import ProtocolError, new_key, open_envelope, strict_loads
+from .protocol import (
+    ProtocolError,
+    decode_envelope,
+    envelope,
+    new_key,
+    open_envelope,
+    read_private,
+    read_public,
+    root_of,
+    strict_loads,
+    tensor_table,
+)
 from .rows import (
     PROOF_TYPE,
     Index,
@@ -306,13 +318,13 @@ def cmd_edit(a) -> int:
 
     path = local_path(a.model)
     requests = load_requests(a.requests)
-    names = ("width", "solver", "lam", "batch", "steps", "lr", "contexts", "polish", "anchor", "max_rank", "seed",
+    names = ("width", "solver", "lam", "batch", "steps", "lr", "contexts", "polish", "anchor", "clamp", "max_rank", "seed",
              "window", "held", "neutral")
     settings = Settings(layers=[int(x) for x in a.layers.split(",")] if a.layers else None,
                         **{n: getattr(a, n) for n in names if getattr(a, n) is not None})
     out = Path(a.out)
     ledger = Path(a.ledger or out.with_suffix(".ledger.jsonl"))
-    key = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+    key = read_private(a.key) if a.key else None
     done = edit_facts(open_runtime(path, a.backend), Checkpoint.open(path), requests, settings, neutral=a.text,
                       key=key, ledger=ledger, track=a.track)
     done.patch.save(out)
@@ -389,7 +401,7 @@ def cmd_index(a) -> int:
             + f"{time.time() - t:.0f}s", f"weights root {index.weights_root}", f"rows root    {index.rows_root}"]
     if a.sign:
         out = a.out + ".link.json"
-        Path(out).write_text(json.dumps(link(index, bytes.fromhex(Path(a.sign).read_text().strip())), indent=1))
+        Path(out).write_text(json.dumps(link(index, read_private(a.sign)), indent=1))
         text.append(f"link signed -> {out}\nthe signature says this key read all of the model, not that anyone else did")
     emit(a, {"path": a.out, "weights_root": index.weights_root, "rows_root": index.rows_root, "bytes": size},
          "\n".join(text))
@@ -435,7 +447,7 @@ def verify_rows(a, proof: dict) -> int:
             f"read {megabytes(read)} of {megabytes(ref.nbytes)}, proof {len(json.dumps(proof)):,} bytes"]
     problems = []
     if a.link:
-        public = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+        public = read_public(a.key) if a.key else None
         opened = open_link(strict_loads(Path(a.link).read_text()), public)
         predicate = opened.statement["predicate"]
         if predicate["rows_root"] != proof["rows_root"]:
@@ -485,10 +497,10 @@ def cmd_clock(a) -> int:
 
 def read_public_key(path: str) -> bytes:
     try:
-        key = bytes.fromhex(Path(path).read_text().strip())
-    except ValueError:
-        key = b""
-    if len(key) != 32:
+        key = read_public(path)
+    except (ValueError, OSError) as e:
+        raise Fail(BAD_INPUT, f"{path}: not a public key; use the .pub file that neyra keygen wrote") from e
+    if len(key) < 32:
         raise Fail(BAD_INPUT, f"{path}: not a public key; use the .pub file that neyra keygen wrote")
     return key
 
@@ -500,6 +512,11 @@ def cmd_verify(a) -> int:
         raise Fail(BAD_INPUT, f"{a.receipt}: not a receipt or row proof, which are JSON objects")
     if doc.get("type") == PROOF_TYPE:
         return verify_rows(a, doc)
+    kind = decode_envelope(doc)[0].get("predicateType") if isinstance(doc, dict) and "payload" in doc else None
+    if kind == at.PREDICATE_TYPE:
+        return verify_transformation(a, doc, public)
+    if kind == at.STATUS_TYPE:
+        return verify_status(a, doc, public)
     opened = open_envelope(doc, public)
     predicate = opened.statement["predicate"]
     claim = predicate["claim"]
@@ -530,8 +547,176 @@ def cmd_verify(a) -> int:
     return FAILED if problems else OK
 
 
+def parse_recipe(items: list[str]) -> dict:
+    recipe = {}
+    for item in items:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            raise Fail(USAGE, f"--recipe takes name=value, not {item!r}")
+        recipe[key] = int(value) if value.isdigit() else value
+    return recipe
+
+
+def cmd_attest(a) -> int:
+    base_dir, result_dir = Path(local_path(a.base)), Path(local_path(a.result))
+    base_ck, result_ck = Checkpoint.open(str(base_dir)), Checkpoint.open(str(result_dir))
+    before, after = tensor_table(base_ck), tensor_table(result_ck)
+    base_root, result_root = root_of(before), root_of(after)
+    size = sum(r.nbytes for ck in (base_ck, result_ck) for r in ck.tensors.values())
+    recipe, evidence, kind, grade = parse_recipe(a.recipe), [], a.kind, "observed"
+    if a.patch:
+        patch = Patch.load(a.patch)
+        if check_patch(a.patch, base_dir) != "ok" or patch.result_root != result_root:
+            raise Fail(BAD_INPUT, "the patch does not turn this base into this result")
+        recipe["patch_id"], grade = patch.id, "exact"
+        kind = kind or ("edit" if patch.meta.get("method") == "closed form edit" else "patch")
+        evidence.append({"role": "patch", "digest": patch.id})
+    if a.receipt:
+        payload = decode_envelope(strict_loads(Path(a.receipt).read_text()))[1]
+        claim = open_envelope(strict_loads(Path(a.receipt).read_text())).statement["predicate"]["claim"]
+        if claim["result_root"] != result_root:
+            raise Fail(BAD_INPUT, "the receipt is about a different result")
+        evidence.append({"role": "receipt", "digest": at.statement_digest(payload)})
+    base_files = result_files = []
+    if not a.no_files:
+        base_files, result_files = (at.file_digests(d, tuple(a.ignore), a.allow_symlinks) for d in (base_dir, result_dir))
+    if a.oms and result_files:
+        declared, root = at.oms_files(json.loads(Path(a.oms).read_text()))
+        if declared != result_files or at.oms_root(declared) != root:
+            raise Fail(BAD_INPUT, "the OMS signature does not describe the files in this result directory")
+    statement = at.transformation(
+        kind=kind or "unknown", grade=grade, meaning=a.meaning, base_root=base_root, result_root=result_root,
+        base_files=base_files, result_files=result_files, result_name=a.name or result_dir.resolve().name,
+        recipe=recipe, extent=at.measure(base_ck, result_ck, before, after), ignore=tuple(a.ignore),
+        coverage={"bytes_read": size, "bytes_total": size}, attempts=a.attempts,
+        evidence=evidence, time=a.time)
+    doc = envelope(statement, read_private(a.key) if a.key else None)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "change.statement.json").write_text(json.dumps(doc, indent=1) + "\n")
+    (out / "change.cdx.json").write_text(json.dumps(at.to_cyclonedx(doc), indent=1) + "\n")
+    (out / "CHANGE.md").write_text(at.to_page(doc))
+    emit(a, {"path": str(out), "kind": statement["predicate"]["kind"], "grade": grade, "base_root": base_root,
+             "result_root": result_root, "signed": bool(doc["signatures"])},
+         f"{statement['predicate']['kind']} ({grade}), {'signed' if doc['signatures'] else 'NOT signed'} -> {out}\n"
+         f"change.statement.json, change.cdx.json, CHANGE.md")
+    return OK
+
+
+def cmd_render(a) -> int:
+    doc = strict_loads(Path(a.statement).read_text())
+    at.open_transformation(doc)
+    text = json.dumps(at.to_cyclonedx(doc), indent=1) + "\n" if a.format == "cdx" else at.to_page(doc)
+    if a.out:
+        Path(a.out).write_text(text)
+    else:
+        sys.stdout.write(text)
+    return OK
+
+
+def verify_transformation(a, doc: dict, public: bytes | None) -> int:
+    opened = at.open_transformation(doc, public)
+    p = opened.statement["predicate"]
+    problems = []
+    sig = "signature verified" if opened.signed else "NOT signed: an unauthenticated record"
+    text = [f"transformation statement well formed, {sig}",
+            f"{p['kind']}, evidence {p['grade']}, signer's meaning: {p['meaning']}"]
+    if a.patch:
+        patch = Patch.load(a.patch)
+        if at.bind_patch(opened.statement, patch) != "ok":
+            problems.append("patch does not match the statement")
+        else:
+            text.append(f"patch matches, {patch.id[7:23]}")
+    if a.base:
+        before = tensor_table(Checkpoint.open(a.base))
+        if root_of(before) != p["base"]["weights_root"]:
+            problems.append("base weights root differs from the statement")
+        else:
+            text.append("base weights root matches")
+        if a.patch and check_patch(a.patch, a.base) != "ok":
+            problems.append("patch does not apply to this base")
+    if a.result:
+        code = at.bind_model(opened.statement, a.result)
+        if code != "ok":
+            problems.append(code)
+        else:
+            text.append("result weights root and file digests match")
+        if a.base and p["extent"] is not None:
+            counted = at.measure(Checkpoint.open(a.base), Checkpoint.open(a.result), before,
+                                 tensor_table(Checkpoint.open(a.result)))
+            if counted != p["extent"]:
+                problems.append("extent differs from what the models show")
+    text += [f"problem: {x}" for x in problems]
+    text.append("not measured: " + ", ".join(p["not_measured"]) + ". A signature shows who said this, not that it is true")
+    emit(a, {"kind": p["kind"], "grade": p["grade"], "signed": opened.signed, "problems": problems}, "\n".join(text))
+    return FAILED if problems else OK
+
+
+def verify_status(a, doc: dict, public: bytes | None) -> int:
+    opened = at.open_status(doc, public)
+    p = opened.statement["predicate"]
+    text = [f"{p['action']} record well formed, {'signature verified' if opened.signed else 'NOT signed'}",
+            f"target {p['target'][7:23]}, reason: {p['reason']}"]
+    emit(a, {"action": p["action"], "target": p["target"], "signed": opened.signed}, "\n".join(text))
+    return OK
+
+
+def load_statement(path: str) -> at.Opened:
+    doc = strict_loads(Path(path).read_text())
+    statement, payload = decode_envelope(doc)
+    return at.Opened(statement, bool(doc.get("signatures")), payload)
+
+
+def write_status(a, action: str, replacement: at.Opened | None = None) -> int:
+    target = load_statement(a.target)
+    root = at.weights_root_of(target.statement)
+    if root is None:
+        raise Fail(BAD_INPUT, "the target is neither a transformation statement nor a receipt")
+    record = at.status(action=action, target=at.statement_digest(target.payload), weights_root=root,
+                       reason=a.reason, meaning=a.meaning, time=a.time,
+                       replacement=at.statement_digest(replacement.payload) if replacement else None)
+    doc = envelope(record, read_private(a.key) if a.key else None)
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    emit(a, {"path": a.out, "action": action, "target": record["predicate"]["target"]},
+         f"{action} record for {record['predicate']['target'][7:23]} -> {a.out}\n"
+         "the original statement is untouched; the record says nothing unless a reader trusts its key")
+    return OK
+
+
+def cmd_supersede(a) -> int:
+    return write_status(a, "supersede", load_statement(a.replacement))
+
+
+def cmd_withdraw(a) -> int:
+    return write_status(a, "withdraw")
+
+
+def cmd_status(a) -> int:
+    target = load_statement(a.target)
+    trusted = [read_public(k) for k in a.key]
+    records, ignored = [], 0
+    for path in a.records:
+        doc = strict_loads(Path(path).read_text())
+        for public in trusted:
+            try:
+                records.append(at.open_status(doc, public))
+                break
+            except ProtocolError:
+                continue
+        else:
+            ignored += 1
+    answer = at.resolve(target, records)
+    text = [f"{answer['state']}"]
+    text += [f"  withdrawn: {w['reason']} ({w['time']})" for w in answer["withdrawn"]]
+    text += [f"  superseded by {r[7:23]}" for r in answer["superseded_by"]]
+    if ignored:
+        text.append(f"{ignored} records were not signed by a trusted key, or were malformed, and were ignored")
+    emit(a, {**answer, "ignored": ignored}, "\n".join(text))
+    return OK if answer["state"] == "current" else FINDINGS
+
+
 def cmd_keygen(a) -> int:
-    key = new_key(a.out)
+    key = new_key(a.out, a.algorithm)
     emit(a, {"keyid": key, "path": a.out}, f"{key}\nprivate key {a.out}, public key {Path(a.out).with_suffix('.pub')}")
     return OK
 
@@ -748,6 +933,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--contexts", type=int)
     p.add_argument("--polish", type=int, help="extra passes on the last layer to correct for rounding")
     p.add_argument("--anchor", type=float, help="cap on a value vector's norm, against the unedited model's")
+    p.add_argument("--clamp", type=float, help="cap on how far the value descent may move the output, in its norm")
     p.add_argument("--max-rank", type=int, dest="max_rank")
     p.add_argument("--seed", type=int)
     p.add_argument("--track", action="store_true", help="measure after every batch, to see sequential decay")
@@ -783,8 +969,51 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--index", help="published row index; needed for a model that is not on disk")
     p.add_argument("-o", "--out", default="rows.proof.json")
 
-    p = command("verify", cmd_verify, "check a receipt, or a row proof against the rows it claims")
-    p.add_argument("receipt", help="receipt, or a row proof from neyra prove")
+    p = command("attest", cmd_attest, "sign a statement of what changed between two models")
+    p.add_argument("base")
+    p.add_argument("result")
+    p.add_argument("-o", "--out", default="change", help="directory for the statement, CycloneDX file and one page summary")
+    p.add_argument("--patch", help="the patch that makes the result from the base; gives the exact grade")
+    p.add_argument("--receipt", help="a lab or edit receipt for the result, recorded as evidence")
+    p.add_argument("--kind", choices=at.KINDS)
+    p.add_argument("--meaning", choices=sorted(at.MEANINGS), default="authored")
+    p.add_argument("--attempts", type=int, metavar="N",
+                   help="how many results you made and tried before this one; left out, the statement says nobody counted")
+    p.add_argument("--recipe", action="append", default=[], metavar="NAME=VALUE")
+    p.add_argument("--oms", metavar="MODEL.SIG", help="the OMS signature of the result; refuse if it describes other files")
+    p.add_argument("--name", help="model name for the OMS subject; default the directory name")
+    p.add_argument("--ignore", action="append", default=[], metavar="PATH", help="a path OMS was told to ignore")
+    p.add_argument("--allow-symlinks", action="store_true")
+    p.add_argument("--no-files", action="store_true", help="leave file digests out: no join to OMS, no whole file read")
+    p.add_argument("--key", help="private key file, Ed25519 as neyra keygen writes it or a PEM P-256 key")
+    p.add_argument("--time", help="RFC 3339 UTC time to record; default now")
+
+    p = command("render", cmd_render, "derive the CycloneDX file or the one page summary from a statement")
+    p.add_argument("statement")
+    p.add_argument("--format", choices=["cdx", "page"], default="page")
+    p.add_argument("-o", "--out")
+
+    for name, fn, text in (("supersede", cmd_supersede, "record that a statement is replaced by another"),
+                           ("withdraw", cmd_withdraw, "record that the signer no longer stands behind a statement")):
+        p = command(name, fn, text)
+        p.add_argument("target", help="the statement or receipt this concerns; it is read, never changed")
+        if name == "supersede":
+            p.add_argument("--replacement", required=True)
+        p.add_argument("--reason", required=True)
+        p.add_argument("--meaning", choices=sorted(at.MEANINGS), default="authored")
+        p.add_argument("--key")
+        p.add_argument("--time")
+        p.add_argument("-o", "--out", required=True)
+
+    p = command("status", cmd_status, "say whether a statement is current, superseded or withdrawn, by records you trust")
+    p.add_argument("target")
+    p.add_argument("records", nargs="*")
+    p.add_argument("--key", action="append", required=True, metavar="PUB", help="a public key whose records count")
+
+    p = command("verify", cmd_verify, "check a receipt, a transformation statement, or a row proof")
+    p.add_argument("receipt", help="receipt or statement, or a row proof from neyra prove")
+    p.add_argument("--base", help="base model, for a transformation statement")
+    p.add_argument("--result", help="result model, for a transformation statement")
     p.add_argument("model", nargs="?", help="model to read the rows from, for a row proof")
     p.add_argument("--link", help="signed link from neyra index --sign, for a row proof")
     p.add_argument("--ledger")
@@ -801,8 +1030,10 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--check", metavar="CLAIM", help="reproduce a claim from the bytes instead of making one")
     p.add_argument("-o", "--out", default="clock.claim.json")
 
-    p = command("keygen", cmd_keygen, "create an ed25519 key for signing receipts")
+    p = command("keygen", cmd_keygen, "create a key for signing receipts and statements")
     p.add_argument("-o", "--out", default="neyra.key")
+    p.add_argument("--algorithm", choices=["ed25519", "ecdsa-p256"], default="ed25519",
+                   help="ecdsa-p256 writes PEM files, the kind OMS key signing reads")
 
     p = command("log", cmd_log, "print a lab ledger after checking its chain")
     p.add_argument("ledger")

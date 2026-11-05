@@ -899,6 +899,1042 @@
   }
  },
  {
+  "kind": "patch",
+  "id": "lowrank-three-dtypes-with-base",
+  "file": "fixtures/lowrank.neyra",
+  "base": "fixtures/lowrank-base",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-no-base",
+  "file": "fixtures/lowrank.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-on-a-different-base",
+  "file": "fixtures/lowrank.neyra",
+  "base": "fixtures/base",
+  "expect": {
+   "code": "base_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-left-digest-wrong",
+  "file": "fixtures/lowrank-left-digest-wrong.neyra",
+  "expect": {
+   "code": "payload_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-right-digest-wrong",
+  "file": "fixtures/lowrank-right-digest-wrong.neyra",
+  "expect": {
+   "code": "payload_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-result-digest-wrong",
+  "file": "fixtures/lowrank-result-digest-wrong.neyra",
+  "base": "fixtures/lowrank-base",
+  "expect": {
+   "code": "result_mismatch"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-left-without-right",
+  "file": "fixtures/lowrank-left-without-right.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-extension-not-required",
+  "file": "fixtures/lowrank-extension-not-required.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-other-extension-too",
+  "file": "fixtures/lowrank-other-extension-too.neyra",
+  "expect": {
+   "code": "unknown_extension"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-on-an-integer-tensor",
+  "file": "fixtures/lowrank-on-an-integer-tensor.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-on-a-vector",
+  "file": "fixtures/lowrank-on-a-vector.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-left-missing",
+  "file": "fixtures/lowrank-left-missing.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-left-is-float32",
+  "file": "fixtures/lowrank-left-is-float32.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-inner-sizes-differ",
+  "file": "fixtures/lowrank-inner-sizes-differ.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-rank-zero",
+  "file": "fixtures/lowrank-rank-zero.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "patch",
+  "id": "lowrank-factor-rows-wrong",
+  "file": "fixtures/lowrank-factor-rows-wrong.neyra",
+  "expect": {
+   "code": "bad_manifest"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-signed-p256",
+  "file": "fixtures/receipt-signed-p256.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-p256-no-key-given",
+  "file": "fixtures/receipt-p256-no-key-given.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-p256-wrong-key",
+  "file": "fixtures/receipt-p256-wrong-key.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004346ebde350cc33643d347f46fbdcd9b7cac4cc96cecbc97958b81ce79b02fe2758e6072c129420e022fe774c757ef9c402051c37816f1d1a842c4d3c41fb80c5",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-p256-key-for-ed25519-signature",
+  "file": "fixtures/receipt-p256-key-for-ed25519-signature.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-ed25519-key-for-p256-signature",
+  "file": "fixtures/receipt-ed25519-key-for-p256-signature.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-p256-wrong-curve-key",
+  "file": "fixtures/receipt-p256-wrong-curve-key.json",
+  "public_hex": "3076301006072a8648ce3d020106052b8104002203620004c44d3e5704e8b4d4eac45ce17668ade6d3d18f87c403ce68ca2c8700173905306f3a22010071f647c25262bd5747e5a960f02d9c9e041ce32b1e31060f6bb0764c5bc515c1a75405402f2cb6035ed3f96d84519e72226fbd3e4da95f32487f49",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "receipt",
+  "id": "receipt-p256-tampered-claim",
+  "file": "fixtures/receipt-p256-tampered-claim.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-signed-ed25519",
+  "file": "fixtures/transform-signed-ed25519.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-signed-p256",
+  "file": "fixtures/transform-signed-p256.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-no-key-given",
+  "file": "fixtures/transform-no-key-given.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-unsigned",
+  "file": "fixtures/transform-unsigned.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-unsigned-but-key-given",
+  "file": "fixtures/transform-unsigned-but-key-given.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-wrong-key",
+  "file": "fixtures/transform-wrong-key.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-tampered-after-signing",
+  "file": "fixtures/transform-tampered-after-signing.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-not-canonical",
+  "file": "fixtures/transform-not-canonical.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "not_canonical"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-bad-payload-type",
+  "file": "fixtures/transform-bad-payload-type.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-duplicate-key",
+  "file": "fixtures/transform-duplicate-key.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_json"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-wrong-predicate-type",
+  "file": "fixtures/transform-wrong-predicate-type.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-kind-outside-vocabulary",
+  "file": "fixtures/transform-kind-outside-vocabulary.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-grade-outside-vocabulary",
+  "file": "fixtures/transform-grade-outside-vocabulary.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-meaning-outside-vocabulary",
+  "file": "fixtures/transform-meaning-outside-vocabulary.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-not-measured-incomplete",
+  "file": "fixtures/transform-not-measured-incomplete.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-not-measured-extra-ok",
+  "file": "fixtures/transform-not-measured-extra-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-exact-without-patch-id",
+  "file": "fixtures/transform-exact-without-patch-id.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-unknown-kind-cannot-be-exact",
+  "file": "fixtures/transform-unknown-kind-cannot-be-exact.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-declared-without-extent-ok",
+  "file": "fixtures/transform-declared-without-extent-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-observed-without-extent",
+  "file": "fixtures/transform-observed-without-extent.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-declared-with-the-basis-of-an-exact-one",
+  "file": "fixtures/transform-declared-with-the-basis-of-an-exact-one.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-basis-moves-a-field",
+  "file": "fixtures/transform-basis-moves-a-field.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-sampled-with-the-basis-of-an-exact-one",
+  "file": "fixtures/transform-sampled-with-the-basis-of-an-exact-one.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-sampled-ok",
+  "file": "fixtures/transform-sampled-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-exact-but-partly-read",
+  "file": "fixtures/transform-exact-but-partly-read.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-sampled-but-fully-read",
+  "file": "fixtures/transform-sampled-but-fully-read.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-declared-but-bytes-read",
+  "file": "fixtures/transform-declared-but-bytes-read.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-coverage-missing",
+  "file": "fixtures/transform-coverage-missing.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-attempts-counted-ok",
+  "file": "fixtures/transform-attempts-counted-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-attempts-zero",
+  "file": "fixtures/transform-attempts-zero.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-attempts-a-string",
+  "file": "fixtures/transform-attempts-a-string.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-extent-not-integers",
+  "file": "fixtures/transform-extent-not-integers.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-extent-member-missing",
+  "file": "fixtures/transform-extent-member-missing.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-rederive-empty",
+  "file": "fixtures/transform-rederive-empty.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-time-malformed",
+  "file": "fixtures/transform-time-malformed.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-unknown-member",
+  "file": "fixtures/transform-unknown-member.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-x-member-ok",
+  "file": "fixtures/transform-x-member-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-x-member-inside-result-refused",
+  "file": "fixtures/transform-x-member-inside-result-refused.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-member-missing",
+  "file": "fixtures/transform-member-missing.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-evidence-bad-digest",
+  "file": "fixtures/transform-evidence-bad-digest.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-tool-incomplete",
+  "file": "fixtures/transform-tool-incomplete.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-root-not-a-digest",
+  "file": "fixtures/transform-root-not-a-digest.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-ignore-not-a-list",
+  "file": "fixtures/transform-ignore-not-a-list.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-files-sorted-as-strings",
+  "file": "fixtures/transform-files-sorted-as-strings.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-files-repeat-a-path",
+  "file": "fixtures/transform-files-repeat-a-path.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-file-path-escapes",
+  "file": "fixtures/transform-file-path-escapes.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-file-digest-uppercase",
+  "file": "fixtures/transform-file-digest-uppercase.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-no-files-ok",
+  "file": "fixtures/transform-no-files-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-files-without-name",
+  "file": "fixtures/transform-files-without-name.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-subject-missing-a-file",
+  "file": "fixtures/transform-subject-missing-a-file.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-subject-extra",
+  "file": "fixtures/transform-subject-extra.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-weights-subject-under-sha256",
+  "file": "fixtures/transform-weights-subject-under-sha256.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-subject-missing-oms-root",
+  "file": "fixtures/transform-subject-missing-oms-root.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "transform",
+  "id": "transform-subjects-in-any-order-ok",
+  "file": "fixtures/transform-subjects-in-any-order-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "complete",
+  "statement": "fixtures/bind-good.json",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "patch-id-differs",
+  "statement": "fixtures/bind-other-patch-id.json",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "base-root-differs",
+  "statement": "fixtures/bind-other-base.json",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "result-root-differs",
+  "statement": "fixtures/bind-other-result.json",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "a-different-patch-given",
+  "statement": "fixtures/bind-good.json",
+  "patch": "fixtures/other-patch.neyra",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "statement-fails-alone",
+  "statement": "fixtures/bind-broken.json",
+  "patch": "fixtures/good.neyra",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "transformbinding",
+  "id": "patch-fails-alone",
+  "statement": "fixtures/bind-good.json",
+  "patch": "fixtures/bad-type.neyra",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "complete-with-a-gitignore-that-is-not-listed",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/result-model",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "resharded-keeps-the-root-and-loses-the-files",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/result-model-resharded",
+  "expect": {
+   "code": "files_mismatch"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "resharded-without-files-is-fine",
+  "statement": "fixtures/files-no-files.json",
+  "model": "fixtures/result-model-resharded",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "config-edited",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/result-model-tampered-config",
+  "expect": {
+   "code": "files_mismatch"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "other-weights",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/base",
+  "expect": {
+   "code": "result_mismatch"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "signature-in-directory-named-as-ignored",
+  "statement": "fixtures/files-ignoring-signature.json",
+  "model": "fixtures/result-model-signed",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "signature-in-directory-not-ignored",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/result-model-signed",
+  "expect": {
+   "code": "files_mismatch"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "no-weights",
+  "statement": "fixtures/files-files.json",
+  "model": "fixtures/empty",
+  "expect": {
+   "code": "bad_safetensors"
+  }
+ },
+ {
+  "kind": "transformfiles",
+  "id": "statement-fails-alone",
+  "statement": "fixtures/files-broken.json",
+  "model": "fixtures/result-model",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-withdraw",
+  "file": "fixtures/status-withdraw.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-supersede-p256",
+  "file": "fixtures/status-supersede-p256.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-unsigned",
+  "file": "fixtures/status-unsigned.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-wrong-key",
+  "file": "fixtures/status-wrong-key.json",
+  "public_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004e705364e6efa1befa3f96706f6980f3e22f681592d77599110fbfce6e4400b3b250e8f3fd4da7ef5905ef212ce888eef944059c582deb89d62082ce266e77ba6",
+  "expect": {
+   "code": "bad_signature"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-wrong-predicate-type",
+  "file": "fixtures/status-wrong-predicate-type.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-withdraw-names-a-replacement",
+  "file": "fixtures/status-withdraw-names-a-replacement.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-supersede-without-replacement",
+  "file": "fixtures/status-supersede-without-replacement.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-supersede-itself",
+  "file": "fixtures/status-supersede-itself.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-unknown-action",
+  "file": "fixtures/status-unknown-action.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-empty-reason",
+  "file": "fixtures/status-empty-reason.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-meaning-outside-vocabulary",
+  "file": "fixtures/status-meaning-outside-vocabulary.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-target-not-a-digest",
+  "file": "fixtures/status-target-not-a-digest.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-unknown-member",
+  "file": "fixtures/status-unknown-member.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-x-member-ok",
+  "file": "fixtures/status-x-member-ok.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-time-malformed",
+  "file": "fixtures/status-time-malformed.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "status",
+  "id": "status-subject-differs",
+  "file": "fixtures/status-subject-differs.json",
+  "public_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "expect": {
+   "code": "subject_mismatch"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "withdraws-a-transformation",
+  "status": "fixtures/status-withdraw.json",
+  "target": "fixtures/target-transformation.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "supersedes-a-receipt",
+  "status": "fixtures/status-for-receipt.json",
+  "target": "fixtures/target-receipt.json",
+  "expect": {
+   "code": "ok"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "names-another-statement",
+  "status": "fixtures/status-for-another-statement.json",
+  "target": "fixtures/target-transformation.json",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "names-another-model",
+  "status": "fixtures/status-for-another-model.json",
+  "target": "fixtures/target-transformation.json",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "a-receipt-is-not-the-transformation",
+  "status": "fixtures/status-withdraw.json",
+  "target": "fixtures/target-receipt.json",
+  "expect": {
+   "code": "binding_mismatch"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "record-fails-alone",
+  "status": "fixtures/status-empty-reason.json",
+  "target": "fixtures/target-transformation.json",
+  "expect": {
+   "code": "bad_status"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "target-fails-alone",
+  "status": "fixtures/status-withdraw.json",
+  "target": "fixtures/receipt-bad-type.json",
+  "expect": {
+   "code": "bad_type"
+  }
+ },
+ {
+  "kind": "statusbinding",
+  "id": "target-is-a-bad-transformation",
+  "status": "fixtures/status-withdraw.json",
+  "target": "fixtures/bind-broken.json",
+  "expect": {
+   "code": "bad_transform"
+  }
+ },
+ {
   "kind": "rowtree",
   "id": "leaves-0",
   "leaves_hex": [],

@@ -16,7 +16,23 @@ conforming verifier reaches the same answer. They are the subject of conformance
 Statistical claims are measurements: "on this holdout, under this runtime, the effect was d".
 They are signed statements, recorded here but not reproducible bit for bit, since runtimes differ.
 
-A signature shows who made a claim. It does not show that the claim is true.
+A signature shows that a key signed these bytes. It does not show that the claim is true. In particular it does not show:
+
+- when. Times in a ledger or a statement are the signer's own clock, and a ledger can be written after the fact
+  with any dates, in a hash chain that verifies. Nothing here anchors a time; a transparency log or a trusted
+  timestamp would, and none is required.
+- that a holdout was sealed before anything was tuned against it. `holdout_commit` binds the items to a hash.
+  It does not bind the moment, and a signer who saw the items can commit them afterwards.
+- that the figures in a statistical claim came from a run. They are typed into the claim by the signer, and a
+  forger can write a PASS with invented intervals under a fresh key that verifies.
+- how many tries lie behind a result. A fresh ledger per try leaves no trace. The count a receipt carries
+  (section 7) is the signer's, read from one ledger, and can be too low. With many sessions a null edit will pass
+  gates that a single session would fail, so a pass without a trustworthy count is weak evidence.
+- who the signer is. A key is not an identity; binding keys to people is the job of the system around it.
+
+What a verifier does establish is exact: digests, roots, canonical forms, a patch turning one set of weights
+into another, a ledger's internal chain. Records say which of their fields are exact and which are asserted
+(`basis`, sections 7 and C.1) so that a reader does not take one for the other.
 
 ## 2. Canonical JSON
 
@@ -40,8 +56,8 @@ in every array hashed below, including tensor digests.
 
     digest(domain, bytes) = "sha256:" + hex(SHA-256("neyra/" + domain + "/v1" + 0x00 + bytes))
 
-Domains in use: `payload`, `patch`, `weights`, `ledger`, `holdout`, `key`, and, from Annex B, `rowleaf`,
-`rownode`, `rowtensor`.
+Domains in use: `payload`, `patch`, `weights`, `ledger`, `holdout`, `key`, from Annex B `rowleaf`,
+`rownode`, `rowtensor`, and from Annex C `statement`.
 
 Tensor digest. `dtype` is the safetensors dtype name, `shape` the dimensions, and `raw` the tensor
 bytes exactly as stored, little endian:
@@ -165,6 +181,12 @@ A claim is an object with `type` set to `"neyra.claim/1"`, plus `base_root`, `re
 `patch_id`, `task`, `eval_env`, `statements`, `gates`, `verdict` and `limits`. Any further member is
 informative and MUST be preserved.
 
+Two further members are informative and every producer in this repository writes them. `attempts` is
+`{counted, unit, counted_in, complete}`: `counted` is how many sessions (`unit`) the ledger the receipt is bound to
+holds, counting this one, and `complete` is always `false`, because a signer can open a new ledger for each try.
+`basis` is `{exact, asserted}`, two lists of plain sentences saying which parts of the claim a verifier can
+check and which rest on the signer.
+
 `task.holdout_commit` is `digest("holdout", salt + JCS(items))` with a salt of at least 32 random
 bytes, so the sealed items can be revealed later and checked, and cannot be guessed from the hash.
 
@@ -188,12 +210,20 @@ The payload is the JCS encoding of an in-toto Statement v1:
 - `predicateType`: `https://neyra.run/receipt/v1`
 - `predicate`: `claim`, `digest_algorithm` set to `"neyra/weights/v1"`, `ledger_head`, `ledger_len`
 
-A signature is Ed25519 over the DSSE pre authentication encoding:
+A signature is over the DSSE pre authentication encoding:
 
     "DSSEv1 " + len(payloadType) + " " + payloadType + " " + len(payload) + " " + payload
 
 where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` is standard base64.
-`keyid` is `digest("key", raw 32 byte public key)`.
+Two algorithms are defined, told apart by the length of the public key:
+
+- Ed25519, with a 32 byte raw public key. `sig` is the 64 byte signature.
+- ECDSA over P-256 with SHA-256, with the DER encoded SubjectPublicKeyInfo as public key (91 bytes for the
+  uncompressed point form). `sig` is the ASN.1 DER signature. This is the key type that OpenSSF model
+  signing (OMS) accepts, so one key can sign a model and the statements about it. Any valid DER
+  signature is accepted, malleable ones included; nothing here depends on signatures being unique.
+
+`keyid` is `digest("key", public key bytes)`, the raw 32 bytes or the DER, so keys of the two kinds never share one.
 
 ### Verification order
 
@@ -213,7 +243,7 @@ where lengths are decimal byte counts and `payload` is the decoded bytes. `sig` 
    is a verification failure of that entry. `bad_signature`
 
 An envelope with no signatures is an unauthenticated record, and tools MUST say so. A public key
-that is not 32 bytes is a usage error, outside this protocol.
+that is neither 32 bytes nor a P-256 SubjectPublicKeyInfo is a usage error, outside this protocol.
 
 ### Binding a receipt to its evidence
 
@@ -231,8 +261,8 @@ Revealing the salt and items lets anyone check `holdout_commit`, which is outsid
 
 `ok`, `bad_safetensors`, `bad_json`, `not_canonical`, `bad_type`, `bad_manifest`, `unknown_member`,
 `unknown_extension`, `payload_mismatch`, `bad_index`, `base_mismatch`, `result_mismatch`, `bad_chain`,
-`bad_claim`, `subject_mismatch`, `bad_signature`, `binding_mismatch`, and from Annex B `bad_proof` and
-`proof_mismatch`.
+`bad_claim`, `subject_mismatch`, `bad_signature`, `binding_mismatch`, from Annex B `bad_proof` and
+`proof_mismatch`, and from Annex C `bad_transform`, `bad_status` and `files_mismatch`.
 
 These are normative, so two implementations can be compared line by line.
 
@@ -259,6 +289,11 @@ An implementation counts as independent only if it is in another language and sh
 | `rowtree` | `leaves_hex`, a list of 32 byte hashes | `{root}` |
 | `rowroot` | `model`, a directory | `{root}` or `{code}` |
 | `rowproof` | `proof` and `data`, files | `{code}` |
+| `transform` | `file`, optional `public_hex` (Ed25519 or DER) | `{code}` |
+| `transformbinding` | `statement`, `patch`, files | `{code}` |
+| `transformfiles` | `statement`, a file, and `model`, a directory | `{code}` |
+| `status` | `file`, optional `public_hex` | `{code}` |
+| `statusbinding` | `status`, `target`, files | `{code}` |
 
 Paths are relative to the vectors directory.
 
@@ -270,12 +305,27 @@ the canonical form is a new major version with a new domain string. Optional add
 ## Annex A: extension `low-rank/1`
 
 Dense low rank edits would be huge as index lists. With this extension a patch tensor may also have
-`{i}.left` and `{i}.right`, F64 payloads of shape [rows, r] and [r, columns], and manifest members
-`left_digest` and `right_digest`. Applying it starts from the base converted to float64, adds each
-outer product in order k = 0 to r - 1, casts to float32, rounds to the tensor dtype with round to
-nearest even, then substitutes `idx` and `val`, which correct any remaining entries. Fused multiply
-add MUST NOT be used. Only BF16, F16 and F32 tensors may use it. Verifiers need not implement it, and
-one that does not MUST report `unknown_extension`. No conformance vector requires it.
+`{i}.left` and `{i}.right`, F64 payloads, and manifest members `left_digest` and `right_digest`, digests of
+those payloads as in section 5. `neyra edit` writes patches of this kind, so a C1 verifier MUST implement
+the extension. Conformance for it is the cases of kind `patch` whose ids begin `lowrank`.
+
+Structure. A tensor entry has both `left_digest` and `right_digest` or neither, and `requires` MUST then name
+`low-rank/1`. Only tensors of dtype BF16, F16 or F32 with two dimensions `[rows, cols]` may use it. Any other
+combination is `bad_manifest`, reported with the other structure checks of step 6. `{i}.left` has shape
+`[rows, r]` and `{i}.right` shape `[r, cols]`, both F64, with `r` at least 1. A mismatch, a missing payload or
+a payload tensor the manifest does not account for is `bad_manifest` at step 8. A payload that does not hash
+to its digest is `payload_mismatch` at step 9, together with `idx` and `val`.
+
+Arithmetic. Applying the tensor starts from the base converted to float64 (BF16 is the high half of a float32,
+F16 widens exactly). For k from 0 to r - 1 in order, `w[i][j] = w[i][j] + (left[i][k] * right[k][j])`, each product
+rounded to float64 on its own and then added. Fused multiply add MUST NOT be used, and a language that may fuse
+must separate the multiplication explicitly. The result is cast to float32 by round to nearest even, then
+rounded to the tensor dtype by round to nearest even, with overflow to infinity and gradual underflow for F16,
+and BF16 as the float32 bits plus `0x7FFF` and the lowest kept bit, shifted right 16. Then `val` replaces the
+entries at `idx`, and the tensor digest MUST equal `result_digest`. A result that depends on NaN is outside
+conformance; infinities are inside it.
+
+A verifier that does not implement the extension reports `unknown_extension`, and is not C1.
 
 ## Annex B: extension `rows/1`
 
@@ -360,3 +410,169 @@ roots, and a predicate of `digest_algorithm` `"neyra/rows/v1"`, `weights_root`, 
 A signature on a link says that the signer read the whole model and found its two roots to be these. A
 verifier that trusts the key, or several independent keys, can then accept rows against the weights root.
 Links have no conformance cases in this version.
+
+## Annex C: transformation statements
+
+A receipt (section 8) says what was measured about an edit. It does not say, in a form other tools can
+read, which model came from which, by what kind of change, how a reader checks that, or what the signer's
+signature is supposed to mean. This annex adds a second statement type for that, and records that retire or
+replace a statement. It changes nothing above: receipts, patches and ledgers verify as they did. A verifier that
+does not implement this annex loses nothing and needs no entry in `requires`. Conformance for it is the cases
+of kinds `transform`, `transformbinding`, `transformfiles`, `status` and `statusbinding`, and the P-256 cases of
+kind `receipt`.
+
+The statement is made to sit beside OpenSSF model signing (OMS, model-signing v1.x, `files` serialisation). It
+names the files of the result by plain sha256, and the digest OMS gives the model as a whole, as in-toto
+subjects, so a policy engine that already holds a verified OMS signature can join the two by comparing strings.
+Nothing is read at join time. It also keeps the weights root as a subject, because file digests change when a
+model is resharded, re-serialised or has its safetensors header reordered, and the weights root does not.
+
+### C.1 Transformation statement
+
+The envelope is the one in section 8 with the same verification, and it is signed in the same ways. The
+statement is an in-toto Statement v1 with `predicateType` `https://neyra.run/transformation/v1`.
+
+`subject` MUST hold exactly the following, in any order, and nothing else:
+
+- `{"name": "result-weights", "digest": {"neyra_weights_v1": hex of result.weights_root}}`. The digest key is not
+  `sha256`, because this value is a domain separated hash of tensor digests and is not the sha256 of any file.
+- For each entry of `result.files`: `{"name": path, "digest": {"sha256": sha256}}`.
+- If `result.files` is not empty: `{"name": result.name, "digest": {"sha256": oms_root(result.files)}}`.
+
+`predicate` has these members, all REQUIRED, and no others except `x-` members, which MUST be ignored and preserved:
+
+- `type`: `"neyra.transformation/1"`.
+- `kind`: one of `patch`, `merge`, `adapter`, `quantize`, `edit`, `unknown`. It is what the signer says the change was.
+- `grade`: how the signer knows. `exact`: the signer applied the patch named in `recipe.patch_id` to the base and
+  got the result bit for bit. `observed`: the signer hashed both models in full and compared them tensor by
+  tensor, with no recipe re-derived. `sampled`: only parts were read, and `extent` counts are lower bounds.
+  `declared`: the signer recomputed nothing. A change of kind `unknown` MUST NOT be `exact`.
+- `base`: `{weights_root, files}`. `weights_root` is a digest. `files` lists the base's files as below, and is empty
+  if the signer did not list them.
+- `result`: `{weights_root, files, name, ignore}`. `name` is the model's name as OMS records it (the directory
+  name), non empty if `files` is not. `ignore` is a list of paths left out of `files` beyond the four defaults.
+- `recipe`: an object with no required members, except that an `exact` `patch`, `edit` or `merge` MUST have
+  `patch_id`, a digest. Producers put the facts a reader needs to repeat the change here: for an adapter, the
+  merge path `neyra check` matched; for a quantisation, the scheme and bit width. Values are strings, integers
+  and booleans, never floats.
+- `extent`: counts of integers, `tensors_base`, `tensors_result`, `changed`, `added`, `removed`,
+  `entries_changed`, `entries_total`, or `null`. `changed` counts tensors present in both with different
+  digests, `entries_changed` the elements that differ in those, and `entries_total` all elements of those
+  tensors. A tensor that changed dtype or shape counts all its elements as changed. `null` is allowed only when
+  `grade` is `declared`.
+- `coverage`: `{bytes_read, bytes_total}`, integers. `bytes_total` is the size of the tensor data of the base and
+  the result together, `bytes_read` how much of it the signer hashed or compared. For `exact` and `observed` the
+  two MUST be equal, for `sampled` `bytes_read` MUST be smaller, and for `declared` it MUST be 0.
+- `basis`: `{recomputable, asserted}`, lists of field names. The grade fixes them, and a verifier MUST reject any
+  other value. `asserted` always holds `base.files`, `kind`, `recipe`, `meaning`, `time`, `tool`, `evidence` and
+  `attempts`. For `exact`, `recomputable` is `base.weights_root`, `result.weights_root`, `result.files`, `extent`,
+  `patch_application`; for `observed` the same without `patch_application`; for `sampled` and `declared` it is
+  empty and the first four move to `asserted`, after the fixed eight, in that order.
+- `attempts`: an integer of at least 1, or `null`. It is how many results the signer made and tried before this
+  one, counting it. `null` means nobody counted, and says nothing about whether tries were thrown away. It is
+  always in `asserted`.
+- `rederive`: a non empty array of strings, the steps by which a reader repeats the check. Text for people.
+- `meaning`: what the signature means, one of `authored` (the signer made the change), `reviewed` (the signer
+  reviewed it and did not make it), `approved-for-deploy` (the signer approves this exact result for deployment
+  on the strength of the checks listed here only) and `responsible-for-merge` (the signer is responsible for
+  combining the inputs listed here). A signature does not carry more meaning than the word it signs.
+- `not_measured`: an array of strings that MUST contain `training compute`, `training data` and `behaviour`.
+  The statement cannot be made without saying so.
+- `evidence`: an array of `{role, digest}`, possibly empty. Roles in use are `patch` (a patch id) and `receipt`
+  (the `statement` digest, below, of a receipt's payload).
+- `time`: an RFC 3339 UTC string in the pattern of section 6. It is the signer's clock, not a timestamp.
+- `tool`: `{name, version}`, strings.
+
+A file entry is `{path, sha256}`: `path` relative to the model directory with `/` separators, no empty,
+`.` or `..` component and no `\`; `sha256` 64 lowercase hex characters, of the file's bytes. The array is
+sorted by path component by component, comparing code points, as OMS orders them, with no repeats. So `a/b`
+comes before `a.txt`.
+
+The files of a directory are its regular files at any depth, except those whose path begins with one of
+`.git`, `.gitattributes`, `.github`, `.gitignore`, or an `ignore` path of the statement. A symbolic link makes
+the directory unlistable. `oms_root(files)` is the hex of the SHA-256 over the raw 32 byte file digests,
+concatenated in that order. For the same files OMS 1.1.1 writes this value as the subject digest of its
+statement, and the same file digests as `predicate.resources`.
+
+A statement is a claim about the signer's own reading of the two models. It is not a measure of training compute,
+data or behaviour, and says so. Signing it does not show when it was signed, who the signer is, or that the
+`asserted` fields are true; section 1 lists what no signature here proves.
+
+Reading of the byte counts. `coverage` is how much the signer says they read. A reader who holds the models
+can recompute `result.files`, `result.weights_root`, `base.weights_root` and `extent` (C.3) and does not need to
+believe it.
+
+### C.2 Verification order
+
+1. Steps 1 to 4 of section 8. `bad_json`, `bad_type`, `not_canonical`.
+2. `_type` MUST be Statement v1 and `predicateType` the one above. `bad_type`
+3. The predicate MUST be well formed as C.1 describes. Any failure is `bad_transform`, so the order within this
+   step does not matter.
+4. `subject` MUST be exactly what C.1 derives from the predicate. `subject_mismatch`
+5. With a public key, a signature as in section 8. `bad_signature`
+
+An unsigned statement is an unauthenticated record, and tools MUST say so.
+
+### C.3 Binding to evidence
+
+Given a statement and a patch, a verifier MUST first verify each alone, the statement and then the patch, and
+report the first failure. It then reports `binding_mismatch` if `recipe.patch_id` is not the patch's id, or the
+patch's `base_root` or `result_root` differs from `base.weights_root` or `result.weights_root`.
+
+Given a statement and a model directory, a verifier verifies the statement alone, then computes the weights root
+of the directory (section 3) and reports `result_mismatch` if it is not `result.weights_root`. If `result.files`
+is not empty it then lists the directory as C.1 describes and reports `files_mismatch` unless the listing equals
+`result.files`. A directory with no weight files is `bad_safetensors`.
+
+Both bindings need a full read of the model. The weights root has never been cheaper than that, and a file
+digest cannot be sampled. What costs nothing is joining to an OMS signature that is already verified: compare
+`result.files` with its `predicate.resources` and `oms_root(result.files)` with its subject digest.
+
+### C.4 Status records
+
+A statement is never edited or deleted. A later signed record says that it is replaced, or that the signer no
+longer stands behind it. The statement keeps verifying as what it was.
+
+A status record is an in-toto Statement v1 with `predicateType` `https://neyra.run/status/v1`, one subject,
+`{"name": "result-weights", "digest": {"neyra_weights_v1": hex of weights_root}}`, and a predicate with these
+members, no others except `x-`:
+
+- `type`: `"neyra.status/1"`.
+- `action`: `supersede` or `withdraw`.
+- `target`: the `statement` digest of the payload of the envelope concerned,
+  `digest("statement", payload bytes)`. The target may be a transformation statement or a receipt.
+- `replacement`: the same digest of the payload that takes its place. REQUIRED for `supersede`, and MUST NOT
+  appear for `withdraw`. It MUST differ from `target`.
+- `weights_root`: the result weights root of the target.
+- `reason`: a non empty string.
+- `meaning`, `time`, `tool`: as in C.1.
+
+Verification: steps 1 and 2 of C.2 with this predicate type, then the members above. `bad_status`. The subject
+MUST be the one named. `subject_mismatch`. Then the signature, `bad_signature`.
+
+Binding. Given a record and its target envelope, a verifier verifies each alone, the record and then the target
+by its own predicate type, and reports `binding_mismatch` if `target` is not the digest of the target's payload
+or `weights_root` is not the target's result root (`result.weights_root`, or `claim.result_root` in a receipt).
+
+Meaning. A record carries weight only when signed by a key the reader already trusts for the target. A reader
+that gathers records MUST ignore those it cannot attribute to a trusted key. Of the records that bind, a
+withdrawal makes the target `withdrawn`, else a supersession makes it `superseded` by the replacement digests
+named, else it is `current`. The reader is told who withdrew it, why and when. Withdrawing a replacement does
+not make the replaced statement current again.
+
+A withdrawal is not a revocation of a key, and says nothing about other statements by the same signer.
+
+### C.5 Relation to other attestations
+
+A pipeline attestation (an Atlas CLI or SLSA record of what ran, with which inputs, on which machine) says what a
+system reports having done. A transformation statement says what two sets of bytes show. Neither implies the other.
+They link by digest and do not need to know each other's format. A statement may carry a pipeline record in
+`evidence` with a role such as `c2pa-manifest` or `slsa-provenance` and the digest of that record. The role is a
+free string, readers that do not know it ignore it, and Neyra checks nothing about what the digest points to.
+The other direction is a pipeline record that lists the `result-weights` subject, or the OMS root, among its outputs.
+
+OMS signs the files of a model and says nothing about how it relates to another. This statement does not replace
+that signature and holds no signature of OMS: it names the same files and the same OMS subject digest, and
+whoever trusts both signatures can join them. A signer who wants one key for both signs with P-256 (section 8).
+`model_signing verify` reads only its own predicate, so it will report a mismatch on a transformation statement; the
+signature itself verifies with the OMS key verifier, as the demonstration in the repository shows.

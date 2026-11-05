@@ -12,9 +12,9 @@ import numpy as np
 from neyra.conformance import _run
 from neyra.ledger import GENESIS, entry_digest
 from neyra.patch import Patch, diff_tensor, write_safetensors
-from neyra.protocol import digest, envelope, jcs, statement_for, tensor_table
+from neyra.protocol import bits_digest, digest, envelope, jcs, statement_for, tensor_table
 from neyra.rows import build_index, fetch, prove
-from neyra.store import Checkpoint
+from neyra.store import Checkpoint, LocalBlob, parse_header
 
 ROOT = Path(__file__).parent
 FIX = ROOT / "fixtures"
@@ -267,6 +267,412 @@ other_patch = Patch([diff_tensor("w", "BF16", a, a ^ np.uint16(1))]).bind(tensor
 other_patch.save(FIX / "other-patch.neyra")
 binding("different-patch", "binding_mismatch", patch_file="fixtures/other-patch.neyra")
 binding("ledger-fails-alone", "bad_chain", ledger_file="fixtures/ledger-edited.jsonl")
+
+# Annex A: low rank patches. The float arithmetic is the part two languages can disagree on.
+from neyra.numerics import from_float
+from neyra.patch import TensorEdit
+
+lr_rng = np.random.default_rng(11)
+
+
+def floats(dtype, *shape, scale=1.0):
+    return from_float((lr_rng.normal(size=shape) * scale).astype(np.float32), dtype)
+
+
+def explicit_edit(name, dtype, base, left, right):
+    edit = TensorEdit(name, dtype, base.shape, bits_digest(dtype, base), "", np.zeros(0, np.int64),
+                      np.zeros(0, base.dtype), np.array(left, np.float64), np.array(right, np.float64))
+    edit.result_digest = bits_digest(dtype, edit.apply(base, verify=False))
+    return edit
+
+
+def low_rank_edit(name, dtype, base, rank, scale, corrections=0):
+    rows, cols = base.shape
+    left, right = lr_rng.normal(size=(rows, rank)) * scale, lr_rng.normal(size=(rank, cols))
+    edit = TensorEdit(name, dtype, base.shape, bits_digest(dtype, base), "", np.zeros(0, np.int64),
+                      np.zeros(0, base.dtype), left, right)
+    built = edit.apply(base, verify=False).reshape(-1)
+    if corrections:
+        edit.idx = np.sort(lr_rng.choice(built.size, corrections, replace=False)).astype(np.int64)
+        edit.val = (built[edit.idx] ^ base.dtype.type(1)).astype(base.dtype)
+        built = built.copy()
+        built[edit.idx] = edit.val
+    edit.result_digest = bits_digest(dtype, built.reshape(base.shape))
+    return edit
+
+
+tiny = floats("F16", 6, 5, scale=3e-4)
+tiny[0, 0] = from_float(np.float32([6.0e4]), "F16")[0]
+lr_base = FIX / "lowrank-base"
+lr_base.mkdir()
+bf_base, f32_base = floats("BF16", 7, 9), lr_rng.normal(size=(4, 6)).astype(np.float32)
+bf_ties = from_float(np.float32([[1.0, 1.0]]), "BF16")
+write_safetensors(lr_base / "model-0.safetensors", {"bf": bf_base, "bf_ties": bf_ties}, {"format": "pt"}, "BF16")
+wide = from_float(np.clip(lr_rng.normal(size=(3, 4)) * 4e4, -6e4, 6e4).astype(np.float32), "F16")
+half_ties = from_float(np.float32([[1.0, 1.0, 0.0, 0.0]]), "F16")
+write_safetensors(lr_base / "model-1.safetensors", {"half": tiny, "wide": wide, "half_ties": half_ties}, {"format": "pt"}, "F16")
+ones = np.ones((1, 1), np.float32)
+write_safetensors(lr_base / "model-2.safetensors", {"single": f32_base, "plain": b, "order": ones, "tie": ones.copy()},
+                  {"format": "pt"})
+lr_ck = Checkpoint.open(str(lr_base))
+lr_table = tensor_table(lr_ck)
+lowrank = Patch([low_rank_edit("bf", "BF16", bf_base, 2, 0.05, corrections=3),
+                 low_rank_edit("half", "F16", tiny, 1, 4e-4),
+                 low_rank_edit("single", "F32", f32_base.view(np.uint32), 3, 0.02),
+                 low_rank_edit("wide", "F16", wide, 1, 9e4),
+                 # exact midpoints between two neighbours: the even one wins, up or down
+                 explicit_edit("bf_ties", "BF16", bf_ties, [[1.0]], [[2.0**-8, 3 * 2.0**-8]]),
+                 explicit_edit("half_ties", "F16", half_ties, [[1.0]], [[2.0**-11, 3 * 2.0**-11, 2.0**-25, 3 * 2.0**-25]]),
+                 # 2^53 + 1 does not exist in float64: added first the 1 is lost, added last it survives
+                 explicit_edit("order", "F32", ones.view(np.uint32), [[2.0**53, -(2.0**53)]], [[1.0], [1.0]]),
+                 # a product that lands on a rounding midpoint only if it is rounded before the add
+                 explicit_edit("tie", "F32", ones.view(np.uint32), [[float.fromhex("0x1.e96b96aac6da2p-24")]],
+                               [[float.fromhex("0x1.91b752265b1f5p+0")]])]).bind(lr_table)
+lowrank.save(FIX / "lowrank.neyra")
+case("patch", "lowrank-three-dtypes-with-base", {"code": "ok"}, file="fixtures/lowrank.neyra", base="fixtures/lowrank-base")
+case("patch", "lowrank-no-base", {"code": "ok"}, file="fixtures/lowrank.neyra")
+case("patch", "lowrank-on-a-different-base", {"code": "base_mismatch"}, file="fixtures/lowrank.neyra", base="fixtures/base")
+
+
+def lowrank_variant(name, expect, manifest=None, tensors=None, with_base=True):
+    refs, meta = parse_header(LocalBlob(FIX / "lowrank.neyra"))
+    doc = json.loads(meta["neyra.manifest"])
+    kinds = {"I64": np.int64, "F64": np.float64}
+    payload = {k: r.read().view(kinds[r.dtype]) if r.dtype in kinds else r.read() for k, r in refs.items()}
+    if manifest:
+        manifest(doc)
+    if tensors:
+        tensors(payload)
+    write_safetensors(FIX / name, payload, {"neyra.manifest": jcs(doc).decode()})
+    case("patch", name.removesuffix(".neyra"), {"code": expect}, file=f"fixtures/{name}",
+         **({"base": "fixtures/lowrank-base"} if with_base else {}))
+
+
+SINGLE = sorted(e.name.encode("utf-16-be") for e in lowrank.edits).index("single".encode("utf-16-be"))
+
+
+def entry(i):
+    return lambda d: d["tensors"][i]
+
+
+lowrank_variant("lowrank-left-digest-wrong.neyra", "payload_mismatch",
+                lambda d: entry(0)(d).update(left_digest="sha256:" + "1" * 64), with_base=False)
+lowrank_variant("lowrank-right-digest-wrong.neyra", "payload_mismatch",
+                lambda d: entry(1)(d).update(right_digest="sha256:" + "1" * 64), with_base=False)
+lowrank_variant("lowrank-result-digest-wrong.neyra", "result_mismatch",
+                lambda d: entry(SINGLE)(d).update(result_digest="sha256:" + "2" * 64))
+lowrank_variant("lowrank-left-without-right.neyra", "bad_manifest", lambda d: entry(0)(d).pop("right_digest"), with_base=False)
+lowrank_variant("lowrank-extension-not-required.neyra", "bad_manifest", lambda d: d.update(requires=[]), with_base=False)
+lowrank_variant("lowrank-other-extension-too.neyra", "unknown_extension",
+                lambda d: d.update(requires=["low-rank/1", "quantum/1"]), with_base=False)
+lowrank_variant("lowrank-on-an-integer-tensor.neyra", "bad_manifest", lambda d: entry(0)(d).update(dtype="I8"), with_base=False)
+lowrank_variant("lowrank-on-a-vector.neyra", "bad_manifest", lambda d: entry(0)(d).update(shape=[63]), with_base=False)
+lowrank_variant("lowrank-left-missing.neyra", "bad_manifest", tensors=lambda p: p.pop("0.left"), with_base=False)
+lowrank_variant("lowrank-left-is-float32.neyra", "bad_manifest",
+                tensors=lambda p: p.update({"0.left": p["0.left"].astype(np.float32)}), with_base=False)
+lowrank_variant("lowrank-inner-sizes-differ.neyra", "bad_manifest",
+                tensors=lambda p: p.update({"0.left": p["0.left"][:, :1].copy()}), with_base=False)
+lowrank_variant("lowrank-rank-zero.neyra", "bad_manifest",
+                tensors=lambda p: p.update({"1.left": p["1.left"][:, :0].copy(), "1.right": p["1.right"][:0].copy()}),
+                with_base=False)
+lowrank_variant("lowrank-factor-rows-wrong.neyra", "bad_manifest",
+                tensors=lambda p: p.update({f"{SINGLE}.left": p[f"{SINGLE}.left"][:3].copy()}), with_base=False)
+
+# Annex C: transformation statements, status records and P-256 signatures.
+import copy
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from neyra import attest as at
+from neyra.protocol import key_id, pae, root_of
+
+# Published test keys, like the Ed25519 seed above. Nothing real is signed with them.
+P256 = ec.derive_private_key(int.from_bytes(hashlib.sha256(b"neyra conformance vectors, p256").digest(), "big"), ec.SECP256R1())
+P256_OTHER = ec.derive_private_key(int.from_bytes(hashlib.sha256(b"neyra conformance vectors, other").digest(), "big"), ec.SECP256R1())
+P384 = ec.derive_private_key(int.from_bytes(hashlib.sha256(b"neyra conformance vectors, p384").digest(), "big"), ec.SECP384R1())
+
+
+def der(private):
+    return private.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+
+
+def p256_envelope(statement, private=P256, payload=None):
+    payload = payload if payload is not None else jcs(statement)
+    sig = private.sign(pae("application/vnd.in-toto+json", payload), ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+    return {"payloadType": "application/vnd.in-toto+json", "payload": base64.b64encode(payload).decode(),
+            "signatures": [{"keyid": key_id(der(private)), "sig": base64.b64encode(sig).decode()}]}
+
+
+receipt("receipt-signed-p256.json", p256_envelope(statement), "ok", der(P256).hex())
+receipt("receipt-p256-no-key-given.json", p256_envelope(statement), "ok")
+receipt("receipt-p256-wrong-key.json", p256_envelope(statement), "bad_signature", der(P256_OTHER).hex())
+receipt("receipt-p256-key-for-ed25519-signature.json", signed, "bad_signature", der(P256).hex())
+receipt("receipt-ed25519-key-for-p256-signature.json", p256_envelope(statement), "bad_signature", pub)
+receipt("receipt-p256-wrong-curve-key.json", p256_envelope(statement), "bad_signature", der(P384).hex())
+receipt("receipt-p256-tampered-claim.json",
+        {**p256_envelope(statement), "payload": base64.b64encode(jcs(flipped)).decode()}, "bad_signature", der(P256).hex())
+
+RESULT_BITS = a.copy()
+RESULT_BITS[1, 2] ^= 7
+RESULT_BITS[3, 5] ^= 1
+
+
+def result_model(name, *shards, config='{"hidden_size": 4}', extra=()):
+    d = model(name, *shards)
+    (d / "config.json").write_text(config)
+    (d / "docs").mkdir()
+    (d / "docs" / "README.md").write_text("fixture\n")
+    (d / "docs.txt").write_text("sorts after docs/ by component\n")
+    for file in extra:
+        (d / file).write_text("{}")
+    return d
+
+
+whole = {"w": RESULT_BITS, "é.bias": b, "z": c}
+result_dir = result_model("result-model", whole)
+(result_dir / ".gitignore").write_text("*.tmp\n")
+result_model("result-model-resharded", {"z": c}, {"é.bias": b, "w": RESULT_BITS})
+result_model("result-model-tampered-config", whole, config='{"hidden_size": 5}')
+signed_dir = result_model("result-model-signed", whole, extra=("model.sig",))
+
+result_ck = Checkpoint.open(str(result_dir))
+before, after = tensor_table(ck), tensor_table(result_ck)
+TOTAL = sum(r.nbytes for model_ck in (ck, result_ck) for r in model_ck.tensors.values())
+GOOD_T = at.transformation(
+    kind="edit", grade="exact", meaning="authored", base_root=good.base_root, result_root=good.result_root,
+    base_files=at.file_digests(FIX / "base"), result_files=at.file_digests(result_dir), result_name="result-model",
+    recipe={"patch_id": good.id}, extent=at.measure(ck, result_ck, before, after),
+    coverage={"bytes_read": TOTAL, "bytes_total": TOTAL}, time="2026-11-05T12:00:00Z")
+GOOD_T["predicate"]["tool"]["version"] = "0.1.0"
+assert good.result_root == root_of(after)
+TIME2 = "2026-11-06T09:00:00Z"
+
+
+def variant(change):
+    s = copy.deepcopy(GOOD_T)
+    change(s["predicate"])
+    s["subject"] = at.subjects_of(s["predicate"])
+    return s
+
+
+def keyed(statement, key):
+    return {"ed25519": lambda: envelope(statement, secret), "p256": lambda: p256_envelope(statement),
+            "none": lambda: envelope(statement)}[key]()
+
+
+def public_for(key):
+    return {"ed25519": pub, "p256": der(P256).hex(), "none": None}[key]
+
+
+def transform(name, statement, expect, key="ed25519", public=True, doc=None):
+    (FIX / name).write_text(json.dumps(doc or keyed(statement, key)))
+    case("transform", name.removesuffix(".json"), {"code": expect}, file=f"fixtures/{name}",
+         **({"public_hex": public_for(key)} if public and public_for(key) else {}))
+
+
+def payload_of(statement, **swap):
+    return {**envelope(statement, secret), **swap}
+
+
+transform("transform-signed-ed25519.json", GOOD_T, "ok")
+transform("transform-signed-p256.json", GOOD_T, "ok", "p256")
+transform("transform-no-key-given.json", GOOD_T, "ok", public=False)
+transform("transform-unsigned.json", GOOD_T, "ok", "none", public=False)
+(FIX / "transform-unsigned-but-key-given.json").write_text(json.dumps(envelope(GOOD_T)))
+case("transform", "transform-unsigned-but-key-given", {"code": "bad_signature"},
+     file="fixtures/transform-unsigned-but-key-given.json", public_hex=pub)
+(FIX / "transform-wrong-key.json").write_text(json.dumps(p256_envelope(GOOD_T, P256_OTHER)))
+case("transform", "transform-wrong-key", {"code": "bad_signature"}, file="fixtures/transform-wrong-key.json",
+     public_hex=der(P256).hex())
+cut = copy.deepcopy(GOOD_T)
+cut["predicate"]["extent"]["changed"] += 1
+transform("transform-tampered-after-signing.json", GOOD_T, "bad_signature",
+          doc=payload_of(GOOD_T, payload=base64.b64encode(jcs(cut)).decode()))
+transform("transform-not-canonical.json", GOOD_T, "not_canonical",
+          doc=payload_of(GOOD_T, payload=base64.b64encode(json.dumps(GOOD_T, indent=1).encode()).decode()))
+transform("transform-bad-payload-type.json", GOOD_T, "bad_type", doc=payload_of(GOOD_T, payloadType="text/plain"))
+transform("transform-duplicate-key.json", GOOD_T, "bad_json",
+          doc=payload_of(GOOD_T, payload=base64.b64encode(b'{"_type":"x","_type":"y"}').decode()))
+wrong_type = copy.deepcopy(GOOD_T)
+wrong_type["predicateType"] = "https://neyra.run/receipt/v1"
+transform("transform-wrong-predicate-type.json", wrong_type, "bad_type")
+transform("transform-kind-outside-vocabulary.json", variant(lambda p: p.update(kind="rebase")), "bad_transform")
+transform("transform-grade-outside-vocabulary.json", variant(lambda p: p.update(grade="certain")), "bad_transform")
+transform("transform-meaning-outside-vocabulary.json", variant(lambda p: p.update(meaning="blessed")), "bad_transform")
+transform("transform-not-measured-incomplete.json", variant(lambda p: p.update(not_measured=["behaviour", "training data"])), "bad_transform")
+transform("transform-not-measured-extra-ok.json", variant(lambda p: p["not_measured"].append("latency")), "ok")
+transform("transform-exact-without-patch-id.json", variant(lambda p: p.update(recipe={})), "bad_transform")
+transform("transform-unknown-kind-cannot-be-exact.json", variant(lambda p: p.update(kind="unknown")), "bad_transform")
+transform("transform-declared-without-extent-ok.json",
+          variant(lambda p: p.update(grade="declared", kind="quantize", extent=None, recipe={"scheme": "q4"},
+                                     basis=at.basis_for("declared"), coverage={"bytes_read": 0, "bytes_total": TOTAL})), "ok")
+transform("transform-observed-without-extent.json",
+          variant(lambda p: p.update(grade="observed", extent=None, basis=at.basis_for("observed"))), "bad_transform")
+transform("transform-declared-with-the-basis-of-an-exact-one.json",
+          variant(lambda p: p.update(grade="declared", kind="quantize", extent=None, recipe={},
+                                     coverage={"bytes_read": 0, "bytes_total": TOTAL})), "bad_transform")
+transform("transform-basis-moves-a-field.json", variant(lambda p: p["basis"]["asserted"].remove("attempts")), "bad_transform")
+transform("transform-sampled-with-the-basis-of-an-exact-one.json",
+          variant(lambda p: p.update(grade="sampled", kind="unknown", recipe={},
+                                     coverage={"bytes_read": TOTAL - 8, "bytes_total": TOTAL})), "bad_transform")
+transform("transform-sampled-ok.json",
+          variant(lambda p: p.update(grade="sampled", kind="unknown", recipe={}, basis=at.basis_for("sampled"),
+                                     coverage={"bytes_read": TOTAL - 8, "bytes_total": TOTAL})), "ok")
+transform("transform-exact-but-partly-read.json",
+          variant(lambda p: p["coverage"].update(bytes_read=TOTAL - 8)), "bad_transform")
+transform("transform-sampled-but-fully-read.json",
+          variant(lambda p: p.update(grade="sampled", kind="unknown", recipe={}, basis=at.basis_for("sampled"))), "bad_transform")
+transform("transform-declared-but-bytes-read.json",
+          variant(lambda p: p.update(grade="declared", kind="quantize", extent=None, recipe={},
+                                     basis=at.basis_for("declared"))), "bad_transform")
+transform("transform-coverage-missing.json", variant(lambda p: p.pop("coverage")), "bad_transform")
+transform("transform-attempts-counted-ok.json", variant(lambda p: p.update(attempts=3)), "ok")
+transform("transform-attempts-zero.json", variant(lambda p: p.update(attempts=0)), "bad_transform")
+transform("transform-attempts-a-string.json", variant(lambda p: p.update(attempts="3")), "bad_transform")
+transform("transform-extent-not-integers.json", variant(lambda p: p["extent"].update(changed="1")), "bad_transform")
+transform("transform-extent-member-missing.json", variant(lambda p: p["extent"].pop("removed")), "bad_transform")
+transform("transform-rederive-empty.json", variant(lambda p: p.update(rederive=[])), "bad_transform")
+transform("transform-time-malformed.json", variant(lambda p: p.update(time="yesterday")), "bad_transform")
+transform("transform-unknown-member.json", variant(lambda p: p.update(surprise=1)), "bad_transform")
+transform("transform-x-member-ok.json", variant(lambda p: p.update({"x-note": "kept"})), "ok")
+transform("transform-x-member-inside-result-refused.json", variant(lambda p: p["result"].update({"x-note": "no"})), "bad_transform")
+transform("transform-member-missing.json", variant(lambda p: p.pop("evidence")), "bad_transform")
+transform("transform-evidence-bad-digest.json", variant(lambda p: p.update(evidence=[{"role": "patch", "digest": "nope"}])), "bad_transform")
+transform("transform-tool-incomplete.json", variant(lambda p: p["tool"].pop("version")), "bad_transform")
+transform("transform-root-not-a-digest.json", variant(lambda p: p["base"].update(weights_root="sha256:XYZ")), "bad_transform")
+transform("transform-ignore-not-a-list.json", variant(lambda p: p["result"].update(ignore="model.sig")), "bad_transform")
+transform("transform-files-sorted-as-strings.json",
+          variant(lambda p: p["result"].update(files=sorted(p["result"]["files"], key=lambda f: f["path"]))), "bad_transform")
+transform("transform-files-repeat-a-path.json", variant(lambda p: p["result"]["files"].insert(1, dict(p["result"]["files"][0]))), "bad_transform")
+transform("transform-file-path-escapes.json", variant(lambda p: p["result"]["files"].insert(0, {"path": "../x", "sha256": "0" * 64})), "bad_transform")
+transform("transform-file-digest-uppercase.json", variant(lambda p: p["result"]["files"][0].update(sha256="A" * 64)), "bad_transform")
+transform("transform-no-files-ok.json", variant(lambda p: p["result"].update(files=[], name="")), "ok")
+transform("transform-files-without-name.json", variant(lambda p: p["result"].update(name="")), "bad_transform")
+no_file_subject = copy.deepcopy(GOOD_T)
+no_file_subject["subject"] = [s for s in no_file_subject["subject"] if s["name"] != "docs.txt"]
+transform("transform-subject-missing-a-file.json", no_file_subject, "subject_mismatch")
+extra_subject = copy.deepcopy(GOOD_T)
+extra_subject["subject"].append({"name": "extra", "digest": {"sha256": "1" * 64}})
+transform("transform-subject-extra.json", extra_subject, "subject_mismatch")
+plain_root = copy.deepcopy(GOOD_T)
+plain_root["subject"][0]["digest"] = {"sha256": plain_root["subject"][0]["digest"][at.WEIGHTS_KEY]}
+transform("transform-weights-subject-under-sha256.json", plain_root, "subject_mismatch")
+oms_less = copy.deepcopy(GOOD_T)
+oms_less["subject"] = [s for s in oms_less["subject"] if s["name"] != "result-model"]
+transform("transform-subject-missing-oms-root.json", oms_less, "subject_mismatch")
+reordered = copy.deepcopy(GOOD_T)
+reordered["subject"].reverse()
+transform("transform-subjects-in-any-order-ok.json", reordered, "ok")
+
+# Binding to a patch
+BROKEN = variant(lambda p: p.update(kind="rebase"))
+for name, st in (("good", GOOD_T), ("other-patch-id", variant(lambda p: p["recipe"].update(patch_id=other_patch.id))),
+                 ("other-base", variant(lambda p: p["base"].update(weights_root="sha256:" + "7" * 64))),
+                 ("other-result", variant(lambda p: p["result"].update(weights_root="sha256:" + "8" * 64))),
+                 ("broken", BROKEN)):
+    (FIX / f"bind-{name}.json").write_text(json.dumps(envelope(st)))
+
+
+def tbind(id, expect, statement, patch="fixtures/good.neyra"):
+    case("transformbinding", id, {"code": expect}, statement=f"fixtures/bind-{statement}.json", patch=patch)
+
+
+tbind("complete", "ok", "good")
+tbind("patch-id-differs", "binding_mismatch", "other-patch-id")
+tbind("base-root-differs", "binding_mismatch", "other-base")
+tbind("result-root-differs", "binding_mismatch", "other-result")
+tbind("a-different-patch-given", "binding_mismatch", "good", "fixtures/other-patch.neyra")
+tbind("statement-fails-alone", "bad_transform", "broken")
+tbind("patch-fails-alone", "bad_type", "good", "fixtures/bad-type.neyra")
+
+# Binding to a model directory
+for name, st in (("files", GOOD_T),
+                 ("ignoring-signature", variant(lambda p: p["result"].update(
+                     files=at.file_digests(signed_dir, ("model.sig",)), ignore=["model.sig"]))),
+                 ("no-files", variant(lambda p: p["result"].update(files=[], name=""))), ("broken", BROKEN)):
+    (FIX / f"files-{name}.json").write_text(json.dumps(envelope(st)))
+
+
+def tfiles(id, expect, statement, model):
+    case("transformfiles", id, {"code": expect}, statement=f"fixtures/files-{statement}.json", model=f"fixtures/{model}")
+
+
+tfiles("complete-with-a-gitignore-that-is-not-listed", "ok", "files", "result-model")
+tfiles("resharded-keeps-the-root-and-loses-the-files", "files_mismatch", "files", "result-model-resharded")
+tfiles("resharded-without-files-is-fine", "ok", "no-files", "result-model-resharded")
+tfiles("config-edited", "files_mismatch", "files", "result-model-tampered-config")
+tfiles("other-weights", "result_mismatch", "files", "base")
+tfiles("signature-in-directory-named-as-ignored", "ok", "ignoring-signature", "result-model-signed")
+tfiles("signature-in-directory-not-ignored", "files_mismatch", "files", "result-model-signed")
+tfiles("no-weights", "bad_safetensors", "files", "empty")
+tfiles("statement-fails-alone", "bad_transform", "broken", "result-model")
+
+# Status records
+TARGET_DOC = envelope(GOOD_T, secret)
+TARGET = base64.b64decode(TARGET_DOC["payload"])
+RECEIPT_PAYLOAD = base64.b64decode(signed["payload"])
+RESULT_ROOT = GOOD_T["predicate"]["result"]["weights_root"]
+
+
+def record(action="withdraw", target=None, root=RESULT_ROOT, **over):
+    r = at.status(action=action, target=target or at.statement_digest(TARGET), weights_root=root, reason="wrong base",
+                  meaning="authored", time=TIME2, replacement=("sha256:" + "5" * 64) if action == "supersede" else None)
+    r["predicate"]["tool"]["version"] = "0.1.0"
+    r["predicate"].update(over)
+    return r
+
+
+def status_doc(name, rec, expect, key="ed25519", public=True):
+    (FIX / name).write_text(json.dumps(keyed(rec, key)))
+    case("status", name.removesuffix(".json"), {"code": expect}, file=f"fixtures/{name}",
+         **({"public_hex": public_for(key)} if public and public_for(key) else {}))
+
+
+status_doc("status-withdraw.json", record(), "ok")
+status_doc("status-supersede-p256.json", record("supersede"), "ok", "p256")
+status_doc("status-unsigned.json", record(), "ok", "none", public=False)
+(FIX / "status-wrong-key.json").write_text(json.dumps(p256_envelope(record(), P256_OTHER)))
+case("status", "status-wrong-key", {"code": "bad_signature"}, file="fixtures/status-wrong-key.json", public_hex=der(P256).hex())
+status_doc("status-wrong-predicate-type.json", {**record(), "predicateType": at.PREDICATE_TYPE}, "bad_type")
+withdraw_with_replacement = record()
+withdraw_with_replacement["predicate"]["replacement"] = "sha256:" + "5" * 64
+status_doc("status-withdraw-names-a-replacement.json", withdraw_with_replacement, "bad_status")
+no_replacement = record("supersede")
+del no_replacement["predicate"]["replacement"]
+status_doc("status-supersede-without-replacement.json", no_replacement, "bad_status")
+status_doc("status-supersede-itself.json", record("supersede", replacement=at.statement_digest(TARGET)), "bad_status")
+status_doc("status-unknown-action.json", record(action="revoke"), "bad_status")
+status_doc("status-empty-reason.json", record(reason=""), "bad_status")
+status_doc("status-meaning-outside-vocabulary.json", record(meaning="blessed"), "bad_status")
+status_doc("status-target-not-a-digest.json", record(target="nope"), "bad_status")
+status_doc("status-unknown-member.json", record(surprise=1), "bad_status")
+status_doc("status-x-member-ok.json", record(**{"x-ticket": "42"}), "ok")
+status_doc("status-time-malformed.json", record(time="soon"), "bad_status")
+wrong_subject = record()
+wrong_subject["subject"][0]["digest"][at.WEIGHTS_KEY] = "0" * 64
+status_doc("status-subject-differs.json", wrong_subject, "subject_mismatch")
+
+(FIX / "target-receipt.json").write_text(json.dumps(signed))
+(FIX / "target-transformation.json").write_text(json.dumps(TARGET_DOC))
+(FIX / "status-for-receipt.json").write_text(json.dumps(envelope(
+    record("supersede", target=at.statement_digest(RECEIPT_PAYLOAD), root=claim["result_root"]), secret)))
+(FIX / "status-for-another-statement.json").write_text(json.dumps(envelope(record(target="sha256:" + "6" * 64), secret)))
+(FIX / "status-for-another-model.json").write_text(json.dumps(envelope(record(root="sha256:" + "6" * 64), secret)))
+
+
+def sbind(id, expect, status="status-withdraw", target="target-transformation"):
+    case("statusbinding", id, {"code": expect}, status=f"fixtures/{status}.json", target=f"fixtures/{target}.json")
+
+
+sbind("withdraws-a-transformation", "ok")
+sbind("supersedes-a-receipt", "ok", "status-for-receipt", "target-receipt")
+sbind("names-another-statement", "binding_mismatch", "status-for-another-statement")
+sbind("names-another-model", "binding_mismatch", "status-for-another-model")
+sbind("a-receipt-is-not-the-transformation", "binding_mismatch", "status-withdraw", "target-receipt")
+sbind("record-fails-alone", "bad_status", "status-empty-reason")
+sbind("target-fails-alone", "bad_type", "status-withdraw", "receipt-bad-type")
+sbind("target-is-a-bad-transformation", "bad_transform", "status-withdraw", "bind-broken")
 
 for n in (0, 1, 2, 3, 4, 5, 7, 8, 9):
     case("rowtree", f"leaves-{n}", leaves_hex=[hashlib.sha256(bytes([i])).hexdigest() for i in range(n)])

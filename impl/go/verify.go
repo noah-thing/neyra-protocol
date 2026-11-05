@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -15,7 +19,10 @@ import (
 var (
 	manifestMembers = []string{"type", "base_root", "result_root", "requires", "tensors"}
 	tensorMembers   = []string{"name", "dtype", "shape", "base_digest", "result_digest", "idx_digest", "val_digest"}
+	lowRankMembers  = []string{"left_digest", "right_digest"}
 )
+
+const lowRank = "low-rank/1"
 
 func codeOf(err error) Code {
 	if err == nil {
@@ -59,6 +66,14 @@ var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 func isDigest(v any) bool { s, ok := v.(string); return ok && digestRE.MatchString(s) }
 
 // manifestShape checks the types of required members once they are known to be present.
+func asStrings(l []any) []string {
+	out := make([]string, len(l))
+	for i, x := range l {
+		out[i] = str(x)
+	}
+	return out
+}
+
 func manifestShape(m map[string]any) (ents, req []any, err error) {
 	bad := Code("bad_manifest")
 	ents, ok1 := m["tensors"].([]any)
@@ -83,6 +98,19 @@ func manifestShape(m map[string]any) (ents, req []any, err error) {
 		}
 		for _, k := range tensorMembers[3:] {
 			if !isDigest(em[k]) {
+				return nil, nil, bad
+			}
+		}
+		_, hasLeft := em["left_digest"]
+		_, hasRight := em["right_digest"]
+		if hasLeft != hasRight {
+			return nil, nil, bad
+		}
+		if hasLeft {
+			d := str(em["dtype"])
+			shape, _ := nonNegInts(em["shape"], -1)
+			if !isDigest(em["left_digest"]) || !isDigest(em["right_digest"]) || len(shape) != 2 ||
+				(d != "BF16" && d != "F16" && d != "F32") || !contains(asStrings(req), lowRank) {
 				return nil, nil, bad
 			}
 		}
@@ -125,7 +153,7 @@ func verifyPatch(file, baseDir string) error {
 	if es, ok := m["tensors"].([]any); ok {
 		for _, e := range es {
 			if em, ok := e.(map[string]any); ok {
-				if err := checkMembers(em, tensorMembers); err != nil {
+				if err := checkMembers(em, append(append([]string{}, tensorMembers...), lowRankMembers...)); err != nil {
 					return err
 				}
 			}
@@ -135,8 +163,10 @@ func verifyPatch(file, baseDir string) error {
 	if err != nil {
 		return err
 	}
-	if len(req) > 0 {
-		return Code("unknown_extension") // no extension is implemented
+	for _, r := range req {
+		if r != lowRank {
+			return Code("unknown_extension")
+		}
 	}
 
 	// Payload digests, then index sanity, for every tensor before any base work.
@@ -145,13 +175,15 @@ func verifyPatch(file, baseDir string) error {
 		shape                     []uint64
 		idx                       []uint64
 		val                       []byte
+		left, right               []float64
 	}
 	edits := make([]edit, len(ents))
 	digestBad := false // structure of every payload is checked before any digest
 	for i, e := range ents {
 		em := e.(map[string]any)
 		shape, _ := nonNegInts(em["shape"], -1)
-		ed := edit{str(em["name"]), str(em["dtype"]), str(em["base_digest"]), str(em["result_digest"]), shape, nil, nil}
+		ed := edit{name: str(em["name"]), dtype: str(em["dtype"]), base: str(em["base_digest"]),
+			result: str(em["result_digest"]), shape: shape}
 		idx, val := st.tensors[strconv.Itoa(i)+".idx"], st.tensors[strconv.Itoa(i)+".val"]
 		if idx.dtype != "I64" || val.dtype != unsignedOf[itemSize[ed.dtype]] || len(idx.shape) != 1 ||
 			len(val.shape) != 1 || idx.shape[0] != val.shape[0] {
@@ -160,13 +192,31 @@ func verifyPatch(file, baseDir string) error {
 		if digest("payload", idx.raw) != em["idx_digest"] || digest("payload", val.raw) != em["val_digest"] {
 			digestBad = true
 		}
+		if _, low := em["left_digest"]; low {
+			left, right := st.tensors[strconv.Itoa(i)+".left"], st.tensors[strconv.Itoa(i)+".right"]
+			if left.dtype != "F64" || right.dtype != "F64" || len(left.shape) != 2 || len(right.shape) != 2 ||
+				left.shape[0] != shape[0] || right.shape[1] != shape[1] || left.shape[1] != right.shape[0] ||
+				left.shape[1] == 0 {
+				return Code("bad_manifest")
+			}
+			if digest("payload", left.raw) != em["left_digest"] || digest("payload", right.raw) != em["right_digest"] {
+				digestBad = true
+			}
+			ed.left, ed.right = float64s(left.raw), float64s(right.raw)
+		}
 		ed.val = val.raw
 		for j := 0; j < len(idx.raw); j += 8 {
 			ed.idx = append(ed.idx, binary.LittleEndian.Uint64(idx.raw[j:]))
 		}
 		edits[i] = ed
 	}
-	if len(st.tensors) != 2*len(ents) {
+	payloads := 2 * len(ents)
+	for _, ed := range edits {
+		if ed.left != nil {
+			payloads += 2
+		}
+	}
+	if len(st.tensors) != payloads {
 		return Code("bad_manifest")
 	}
 	if digestBad {
@@ -207,6 +257,9 @@ func verifyPatch(file, baseDir string) error {
 		}
 		w := int(itemSize[t.dtype])
 		out := append([]byte(nil), t.raw...)
+		if ed.left != nil {
+			out = applyLowRank(t.dtype, t.raw, ed.left, ed.right, int(t.shape[0]), int(t.shape[1]))
+		}
 		for j, v := range ed.idx {
 			copy(out[int(v)*w:], ed.val[j*w:(j+1)*w])
 		}
@@ -269,8 +322,16 @@ func verifyReceipt(file string, pub []byte) error {
 	return err
 }
 
-// readReceipt returns the claim and predicate of a receipt that passed.
-func readReceipt(file string, pub []byte) (*receipt, error) {
+// envelope is a DSSE envelope whose payload parsed, was canonical and held a JSON object.
+type envelope struct {
+	pt      string
+	payload []byte
+	sigs    []any
+	st      map[string]any
+}
+
+// readEnvelope runs steps 1 to 4 of section 8, which every statement type shares.
+func readEnvelope(file string) (*envelope, error) {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -309,6 +370,44 @@ func readReceipt(file string, pub []byte) (*receipt, error) {
 		return nil, Code("not_canonical")
 	}
 	s, _ := sv.(map[string]any)
+	return &envelope{pt, payload, sigs, s}, nil
+}
+
+// verifies is Ed25519 for a 32 byte key, otherwise ECDSA over P-256 with SHA-256 and a DER signature.
+func verifies(pub, msg, sig []byte) bool {
+	if len(pub) == ed25519.PublicKeySize {
+		return ed25519.Verify(pub, msg, sig)
+	}
+	k, err := x509.ParsePKIXPublicKey(pub)
+	key, ok := k.(*ecdsa.PublicKey)
+	if err != nil || !ok || key.Curve != elliptic.P256() {
+		return false
+	}
+	sum := sha256.Sum256(msg)
+	return ecdsa.VerifyASN1(key, sum[:], sig)
+}
+
+func (e *envelope) verify(pub []byte) error {
+	pae := []byte("DSSEv1 " + strconv.Itoa(len(e.pt)) + " " + e.pt + " " + strconv.Itoa(len(e.payload)) + " ")
+	pae = append(pae, e.payload...)
+	keyid := digest("key", pub)
+	for _, sg := range e.sigs {
+		m, _ := sg.(map[string]any)
+		sig, err := strictB64(str(m["sig"]))
+		if m["keyid"] == keyid && err == nil && verifies(pub, pae, sig) {
+			return nil
+		}
+	}
+	return Code("bad_signature")
+}
+
+// readReceipt returns the claim and predicate of a receipt that passed.
+func readReceipt(file string, pub []byte) (*receipt, error) {
+	e, err := readEnvelope(file)
+	if err != nil {
+		return nil, err
+	}
+	s := e.st
 	pred, _ := s["predicate"].(map[string]any)
 	if s["_type"] != "https://in-toto.io/Statement/v1" || s["predicateType"] != "https://neyra.run/receipt/v1" {
 		return nil, Code("bad_type")
@@ -347,20 +446,12 @@ func readReceipt(file string, pub []byte) (*receipt, error) {
 	if len(seen) != 2 {
 		return nil, Code("subject_mismatch")
 	}
-	if pub == nil {
-		return &receipt{claim, pred}, nil
-	}
-	pae := []byte("DSSEv1 " + strconv.Itoa(len(pt)) + " " + pt + " " + strconv.Itoa(len(payload)) + " ")
-	pae = append(pae, payload...)
-	keyid := digest("key", pub)
-	for _, sg := range sigs {
-		m, _ := sg.(map[string]any)
-		sig, err := strictB64(str(m["sig"]))
-		if m["keyid"] == keyid && err == nil && len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, pae, sig) {
-			return &receipt{claim, pred}, nil
+	if pub != nil {
+		if err := e.verify(pub); err != nil {
+			return nil, err
 		}
 	}
-	return nil, Code("bad_signature")
+	return &receipt{claim, pred}, nil
 }
 
 func unhex(s string) []byte { b, _ := hex.DecodeString(s); return b }

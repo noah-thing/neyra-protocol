@@ -37,7 +37,7 @@ neyra diff BASE OTHER --sample 4
 
 This works on any machine with Python 3.10 or later, with no GPU. `neyra demo files DIR` writes the toy models it
 uses (about 210 KB) so you can run `check`, `diff` and `patch` on them by hand, and `neyra conformance` runs the
-protocol's 195 test vectors against your install. To run models, install `neyra[mlx]` on Apple Silicon or
+protocol's 312 test vectors against your install. To run models, install `neyra[mlx]` on Apple Silicon or
 `neyra[torch]` elsewhere. `neyra doctor` shows what your machine can do.
 
 To check merges in CI, `uses: noah-thing/neyra-protocol@main` runs `neyra check` and fails the job when the
@@ -57,6 +57,7 @@ extension in [`extensions/hf-neyra`](extensions/hf-neyra) gives `hf neyra diff` 
 | `neyra export` | Turn a patch into a LoRA for PEFT or stock llama.cpp |
 | `neyra probe` | Run a model through a fixed battery and report loops, runaway thinking and missing answers |
 | `neyra verify`, `log`, `keygen` | Check signed receipts and tamper evident ledgers |
+| `neyra attest`, `render`, `supersede`, `withdraw`, `status` | Sign a statement of what changed between two models, in the formats other tools read, and retire it later without editing it |
 | `neyra index`, `prove` | Prove a few rows of a tensor against a rows root, reading only those rows |
 | `neyra clock` | Claim that two checkpoints share a scalar on rows training never fed, bound to their rows roots |
 | `neyra mcp` | Serve a measured lab to any agent |
@@ -183,16 +184,41 @@ about training history. Results carry `"blame": "insertion"` in the command's JS
 ledger entry and the metadata of the patch it writes. Patch identity and the protocol vectors do not
 depend on any of these.
 
+## Signing what changed
+
+```sh
+neyra keygen -o signer.key --algorithm ecdsa-p256      # the key type OpenSSF model signing reads
+neyra attest BASE RESULT --patch edit.neyra --receipt edit.receipt.json --oms result.sig --key signer.key -o change
+neyra verify change/change.statement.json --key signer.pub --base BASE --result RESULT --patch edit.neyra
+```
+
+`attest` writes three files from one signed source. `change.statement.json` is an in-toto statement in a DSSE
+envelope with a new predicate, `https://neyra.run/transformation/v1`: base and result weights roots, the kind of
+change (patch, merge, adapter, quantize, edit or unknown), the recipe, how a reader repeats the check, what the
+signature means (authored, reviewed, approved for deploy, responsible for merge), and which fields a reader can
+recompute and which are only the signer's word. `change.cdx.json` is a CycloneDX 1.7 file with the result as a
+`machine-learning-model` and the base as its ancestor. `CHANGE.md` is one page for a person, and says first what it
+does not measure: training compute, training data and behaviour.
+
+The statement also names the result's files by sha256, and the digest OMS gives the model, as subjects. Anyone who
+holds a verified OMS signature can join the two by comparing strings. A resharded model gets new OMS digests and
+keeps its weights root, so the statement is tied to the weights and the file subjects are one serialisation of them.
+A later `supersede` or `withdraw` record points at the statement by digest and leaves it as it was.
+[`experiments/attestation_demo.py`](experiments/attestation_demo.py) runs the whole thing on a real edit and checks it
+with model-signing, in-toto-attestation, securesystemslib and the CycloneDX schema. A signature does not show when,
+who, or that the signer's figures are true; [section 1 of the spec](spec/PROTOCOL.md) lists what it leaves open.
+
 ## The protocol
 
 [`spec/PROTOCOL.md`](spec/PROTOCOL.md) defines the patch, claim, ledger and receipt formats, with RFC 8785
 canonical JSON, domain separated digests, and a weights root that covers every tensor and ignores how
-files are sharded. [`spec/vectors`](spec/vectors) holds 195 conformance cases.
+files are sharded. [`spec/vectors`](spec/vectors) holds 312 conformance cases.
 
 [`impl/go`](impl/go) is a second verifier in Go. It was written from the spec and vectors alone, with no
-access to the Python source, and it passed the first 103. The problems it exposed in the spec were fixed. The 35
-row proof cases of Annex B and the 57 cases that came out of differential fuzzing were added later by the Python
-author, so they are not yet an independent check. It passes all 195.
+access to the Python source, and it passes the first 103. The problems it exposed in the spec were fixed. The row
+proof cases of Annex B, the cases from differential fuzzing, the low rank patches of Annex A, the P-256 signatures and
+the Annex C statements were added later by the Python author, with the Python source open, so the Go verifier passes
+all 312 cases but is independent only for the first 103. It does read the patches `neyra edit` writes.
 
 [`fuzz/differential.py`](fuzz/differential.py) mutates valid patches, ledgers, receipts, row proofs and models,
 runs both verifiers on every mutant, and ranks disagreements with wrongly accepted input first. It is the first
