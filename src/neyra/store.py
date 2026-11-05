@@ -115,6 +115,12 @@ class TensorRef:
         raw = np.frombuffer(b"".join(parts), dtype=RAW_DTYPE[ITEMSIZE[self.dtype]])
         return raw.reshape(self.shape)
 
+    def read_slice(self, first: int, count: int) -> np.ndarray:
+        """Raw bits of `count` entries from flat entry `first`, without reading the rest of the tensor."""
+        size = ITEMSIZE[self.dtype]
+        raw = self.blob.read(self.start + first * size, count * size)
+        return np.frombuffer(raw, dtype=RAW_DTYPE[size])
+
     def sha256(self) -> str:
         h = hashlib.sha256()
         for o in range(self.start, self.end, CHUNK):
@@ -212,11 +218,29 @@ def canonical_shards(files: list[str]) -> list[str]:
 class Checkpoint:
     """Every tensor in a local directory, a single file, or a Hub repo at a revision."""
 
-    def __init__(self, spec: str, tensors: dict[str, TensorRef], files: list[str], reader):
+    def __init__(self, spec: str, tensors: dict[str, TensorRef], files: list[str], reader, digests=None):
         self.spec = spec
         self.tensors = tensors
         self.files = files
         self._reader = reader
+        self._digests = digests or {}
+        self._root: Path | None = None
+
+    def digest(self, path: str) -> str | None:
+        """SHA-256 of a file. The Hub states it for large files without a download."""
+        if path in self._digests:
+            return self._digests[path]
+        if self._root is not None and path in self.files:
+            h = hashlib.sha256()
+            with open(self._root / path, "rb") as f:
+                while block := f.read(CHUNK):
+                    h.update(block)
+            found = h.hexdigest()
+        else:
+            body = self.raw(path)
+            found = None if body is None else hashlib.sha256(body).hexdigest()
+        self._digests[path] = found
+        return found
 
     @property
     def size(self) -> int:
@@ -251,13 +275,15 @@ class Checkpoint:
         tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)
         names = (p.relative_to(root) for p in root.rglob("*") if p.is_file())
         files = sorted(str(n) for n in names if ".cache" not in n.parts)
-        return cls(str(path), tensors, files, lambda f: (root / f).read_bytes())
+        ck = cls(str(path), tensors, files, lambda f: (root / f).read_bytes())
+        ck._root = root
+        return ck
 
     @classmethod
     def _hub(cls, spec: str, token: str | None) -> Checkpoint:
         repo, _, rev = spec.partition("@")
         rev = rev or "main"
-        req = urllib.request.Request(f"{HF}/api/models/{repo}/revision/{rev}")
+        req = urllib.request.Request(f"{HF}/api/models/{repo}/revision/{rev}?blobs=true")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
@@ -277,4 +303,5 @@ class Checkpoint:
                 return resp.read()
 
         tensors = merge(parse_header(HttpBlob(url(shard), shard, token))[0] for shard in shards)
-        return cls(f"{repo}@{sha}", tensors, files, read)
+        digests = {s["rfilename"]: s["lfs"]["sha256"] for s in info["siblings"] if s.get("lfs")}
+        return cls(f"{repo}@{sha}", tensors, files, read, digests)

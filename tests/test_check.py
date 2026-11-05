@@ -330,9 +330,9 @@ def test_two_checkpoints_without_an_adapter(tmp_path, model_dir, rng, capsys):
     near[0, 0] += 1
     far = bf16(to_float(w, "BF16") * 1.5)
     a = model_dir("a", {"w": w})
-    for name, other, code in (("same", w, 0), ("near", near, 0), ("far", far, 1)):
+    for name, other, code in (("same", w, 0), ("near", near, 1), ("far", far, 1)):
         assert main(["check", str(a), str(model_dir(name, {"w": other}))]) == code
-    assert main(["check", str(a), str(tmp_path / "near"), "--ulps", "0"]) == 1
+    assert main(["check", str(a), str(tmp_path / "near"), "--ulps", "1"]) == 0
     out = capsys.readouterr().out
     assert "equal under rounding" in out and "NOT equivalent" in out
 
@@ -393,3 +393,26 @@ def test_a_correct_merge_that_lost_most_of_the_delta_passes_with_a_warning(tmp_p
     assert main(["check", base.spec, out.spec, "--adapter", str(adapter_dir(tmp_path / "ad", a, b, alpha=1))]) == 0
     text = capsys.readouterr().out
     assert "rounding kept under half of the delta in 1 of 1" in text and "\nequivalent" in text
+
+
+def test_two_checkpoints_with_no_adapter_get_no_tolerance(tmp_path, model_dir, rng, capsys):
+    """Moving every entry one step passed as rounding under the old default of one step."""
+    w = bf16(rng.standard_normal((16, 32)))
+    a = model_dir("a", {TARGET: w})
+    b = model_dir("b", {TARGET: (w.astype(np.int64) + 1).astype(np.uint16)})
+    assert main(["check", str(a), str(b)]) == 1
+    assert main(["check", str(a), str(a)]) == 0
+
+
+def test_a_merge_with_every_entry_one_step_off_is_not_rounding(tmp_path, model_dir, rng):
+    w, a, b, scale = scenario(tmp_path, rng)
+    good = merged_peft(w, delta32(a, b, scale))
+    bumped = (good.astype(np.int64) + 1).astype(np.uint16)
+    assert not run(tmp_path, model_dir, w, bumped, a, b).equivalent
+
+
+def test_a_merge_with_one_entry_one_step_off_is_rounding(tmp_path, model_dir, rng):
+    w, a, b, scale = scenario(tmp_path, rng)
+    one = merged_peft(w, delta32(a, b, scale))
+    one.flat[0] += 1
+    assert run(tmp_path, model_dir, w, one, a, b).equivalent

@@ -52,6 +52,7 @@ extension in [`extensions/hf-neyra`](extensions/hf-neyra) gives `hf neyra diff` 
 | `neyra patch`, `apply`, `show` | Store an edit as a small exact file, rebuild it bit for bit, inspect it |
 | `neyra merge` | Combine several patches made on one base into one patch, with the same bytes in any order |
 | `neyra hop` | Give it the base, the adapter, the merged model and a GGUF in order and get one sentence: the first hop that differs from what the hops before it say it should be, across weights, tokenizer, chat template, special tokens, config and generation config |
+| `neyra identity` | Say what a model is relative to the base it declares: the same files, the same weights, a re-runnable transform, a derivative, or unrelated, from a few megabytes of tensors |
 | `neyra check` | Decide whether a merged model matches its base and its LoRA adapter, and say if the adapter was never applied |
 | `neyra edit` | Write facts into a model as a low rank patch, measure the result, and refuse to call it a success if it hurt neighbours or neutral text |
 | `neyra bisect` | Find the smallest part of a patch that keeps its effect on a behavior |
@@ -191,6 +192,41 @@ fine-tune that is still in each hop is the projection of the stored change on th
 `neyra hop BASE ADAPTER --predict q8_0,q4_0` forecasts it before converting. Rounding is unbiased, so this number
 stays near 100% for a light adapter even in Q4_0, where the stored change is mostly noise. The cosine shows that.
 `python bench/hop_suite.py` scores the command on planted failures, and `--today` runs `check` and `diff` on the same files.
+
+### Naming the real base of a merge
+
+```sh
+neyra check BASE MERGED --adapter ADAPTER_DIR --also MIRROR_OR_OTHER_BASE ...
+```
+
+With `--also`, `check` reads a sample of the edited tensors against every candidate base and reports which one
+plus the adapter gives the merged tensors back. A card, an adapter config and a mirror can each name a different
+base. Candidates that agree on every sampled span are listed as sharing weights, because no merge can tell them
+apart. Without an adapter two checkpoints are compared with no tolerance, and with one an entry may be a step
+off only if at most 2% of the tensor is.
+
+## Identity
+
+```sh
+neyra identity BASE MODEL [--adapter ADAPTER_DIR] [--full]
+```
+
+One verdict, from a sample of 24 matrices read over HTTP ranges (a megabyte or two), or from every byte with `--full`:
+
+| Verdict | Meaning |
+|---|---|
+| bit identical | the safetensors files have the same SHA-256 |
+| same weights in a different file | every tensor hashes the same wherever it is stored, including a fused projection against its split parts and a head against the embedding it is tied to. Only `--full` says this |
+| no difference found in a sample | the sampled spans are equal. Not proof: an edit outside them is missed |
+| derived by a named transform | a cast to another dtype, or a LoRA merge reproduced bit for bit by a named path |
+| derived with unknown transform | far more alike than independently trained models are |
+| unrelated | no more alike than independently trained siblings |
+| inconclusive, not comparable | between the two ranges, or the files lay their tensors out differently |
+
+"Derived" is judged against a null measured on unrelated siblings, never against a number chosen for the occasion;
+the panel, thresholds and held-out error rates are in `src/neyra/identity_null.json`, rebuilt by
+`benchmarks/identity_panel.py`. `tools/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
+takes a candidate, the allowed base and the forbidden instruct model.
 
 ## What bisect measures
 

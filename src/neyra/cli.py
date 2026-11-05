@@ -26,6 +26,7 @@ from .check import (
     NEVER_APPLIED,
     ROUNDING,
     check,
+    name_base,
 )
 from .clock import check_claim, make_claim
 from .conformance import check_binding, check_patch
@@ -33,6 +34,7 @@ from .diff import Report, compare
 from .hop import document as hop_document
 from .hop import render as hop_render
 from .hop import trace
+from .identity import identify
 from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
 from .merge import merge
@@ -192,6 +194,46 @@ def cmd_merge(a) -> int:
     return FINDINGS if shared else OK
 
 
+def cmd_name_base(a) -> int:
+    merged, adapter = Checkpoint.open(a.merged), Checkpoint.open(a.adapter)
+    bases = [Checkpoint.open(s) for s in [a.base, *a.also]]
+    ranked = name_base(merged, adapter, bases, a.sample, a.ulps)
+    text = [f"merged  {merged.spec}", f"adapter {adapter.spec}", ""]
+    for c in ranked:
+        state = ("reproduces the sampled edited tensors" if c.reproduces else
+                 f"does not: {c.off} different, {c.missing} missing" if c.off + c.missing else "nothing to compare")
+        shared = f", agrees on every sampled span with {', '.join(c.shares)}" if c.shares else ""
+        text.append(f"{c.spec}: {c.exact} exact, {c.close} within {a.ulps} step{'s' * (a.ulps != 1)}; {state}{shared}")
+    best = [c for c in ranked if c.reproduces]
+    if not best:
+        text.append("\nnone of the candidates plus the adapter gives this model back")
+    elif len(best) > 1 and best[0].exact == best[1].exact and best[0].close == best[1].close:
+        text.append(f"\n{len(best)} candidates fit equally well, so the merge cannot say which one it was made from")
+    else:
+        text.append(f"\nmade from {best[0].spec} (arithmetic: {', '.join(best[0].paths) or 'see per tensor'})")
+    emit(a, {"merged": merged.spec, "adapter": adapter.spec, "sampled_tensors": a.sample,
+             "candidates": [vars(c) | {"reproduces": c.reproduces} for c in ranked]}, "\n".join(text))
+    return OK if best else FINDINGS
+
+
+def cmd_identity(a) -> int:
+    base, model = Checkpoint.open(a.base), Checkpoint.open(a.model)
+    adapter = Checkpoint.open(a.adapter) if a.adapter else None
+    v = identify(base, model, full=a.full, adapter=adapter)
+    m = v.measure
+    text = [f"base   {base.spec}", f"model  {model.spec}", "", v.label.upper(), v.detail]
+    if m and m.probes:
+        text.append(f"{len(m.probes)} spans sampled, {m.unchanged:.0%} bit for bit the base's, "
+                    f"{(base.bytes_read + model.bytes_read) / 1e6:.1f} MB read")
+    text += v.note
+    emit(a, {"base": base.spec, "model": model.spec, "verdict": v.label, "detail": v.detail, "exact": v.exact,
+             "paths": v.paths, "notes": v.note,
+             "measure": None if m is None else {"cos": m.cos, "relative_distance": m.rel, "unchanged": m.unchanged,
+                                               "spans": len(m.probes), "only_base": len(m.only_base),
+                                               "only_model": len(m.only_model)}}, "\n".join(text))
+    return OK
+
+
 def render_check(c, base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | None) -> str:
     counts = {s: c.count(s) for s in (IDENTICAL, MERGED, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED)}
     text = [f"base    {base.spec}", f"merged  {merged.spec}"]
@@ -231,6 +273,12 @@ def render_check(c, base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | 
 
 
 def cmd_check(a) -> int:
+    if a.ulps is None:
+        a.ulps = 1 if a.adapter else 0
+    if a.also:
+        if not a.adapter:
+            raise Fail(USAGE, "naming the real base of a merge needs the adapter that was merged")
+        return cmd_name_base(a)
     base, merged = Checkpoint.open(a.base), Checkpoint.open(a.merged)
     adapter = Checkpoint.open(a.adapter) if a.adapter else None
     c = check(base, merged, adapter, a.ulps)
@@ -924,7 +972,18 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("base")
     p.add_argument("merged")
     p.add_argument("--adapter", help="PEFT LoRA adapter directory that was merged into the base")
-    p.add_argument("--ulps", type=int, default=1, help="steps of the dtype two tensors may differ by and still count as rounding")
+    p.add_argument("--ulps", type=int, default=None,
+                   help="steps of the dtype an entry may differ by and still count as rounding (default 1 with an adapter, "
+                        "0 without; at most 2%% of a tensor's entries may be off)")
+    p.add_argument("--also", action="append", default=[], metavar="BASE",
+                   help="another candidate base; with it, say which candidate the merge was made from (reads a sample)")
+    p.add_argument("--sample", type=int, default=12, help="edited tensors to read per candidate with --also")
+
+    p = command("identity", cmd_identity, "say what a model is relative to its declared base, from a few megabytes of tensors")
+    p.add_argument("base")
+    p.add_argument("model")
+    p.add_argument("--adapter", help="a PEFT adapter to try as the transform")
+    p.add_argument("--full", action="store_true", help="hash every tensor to confirm identical weights, not a sample")
 
     p = command("hop", cmd_hop, "find the first hop that lost a fine-tune: base, adapter, merged model, GGUF")
     p.add_argument("artifacts", nargs="+", metavar="ARTIFACT", help="base, then the adapter if any, then each later artifact in order")

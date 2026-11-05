@@ -14,6 +14,7 @@ names it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -30,6 +31,7 @@ MLX_KEY = re.compile(r"^(?P<module>.+)\.lora_(?P<side>[ab])$")
 IDENTICAL, MERGED, ROUNDING, DIFFERENT, MISSING, NEVER_APPLIED = (
     "identical", "merged", "rounding", "different", "missing", "never applied")
 EQUIVALENT = {IDENTICAL, MERGED, ROUNDING}
+MAX_OFF = 0.02  # share of a tensor's entries that may sit within --ulps steps of a path and still be rounding
 
 
 @dataclass
@@ -39,6 +41,7 @@ class TensorCheck:
     detail: str = ""
     applied: float | None = None
     paths: list[str] = field(default_factory=list)
+    steps: int | None = None
 
 
 @dataclass
@@ -232,11 +235,14 @@ def classify(name: str, ref: TensorRef, base: np.ndarray, merged: np.ndarray, ul
     if not is_float(dtype):
         return TensorCheck(name, DIFFERENT, f"{int((merged != base).sum()):,} entries differ", applied)
     steps, near = min((gap(merged, m, dtype), p) for p, m in made.items())
-    if steps <= ulps:
-        where = "" if term is None else f" of {near}"
-        return TensorCheck(name, ROUNDING, f"within {steps} step{'s' * (steps != 1)}{where}", applied)
     off = min(int((merged != m).sum()) for m in made.values())
-    return TensorCheck(name, DIFFERENT, f"{off:,} of {merged.size:,} entries differ, by up to {steps:,} steps", applied)
+    # A different order of the float32 product moves a handful of entries one step. A tensor with most entries
+    # moved is an edit, however small each step.
+    if steps <= ulps and off <= MAX_OFF * merged.size:
+        where = "" if term is None else f" of {near}"
+        return TensorCheck(name, ROUNDING, f"within {steps} step{'s' * (steps != 1)}{where}", applied, steps=steps)
+    return TensorCheck(name, DIFFERENT, f"{off:,} of {merged.size:,} entries differ, by up to {steps:,} steps", applied,
+                       steps=steps)
 
 
 def targets(adapter: Adapter, base: Checkpoint) -> dict[str, str]:
@@ -285,12 +291,18 @@ def tied_head(merged: Checkpoint, name: str) -> TensorRef | None:
     return merged.tensors[embed[0]] if len(embed) == 1 else None
 
 
-def check(base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | None = None, ulps: int = 1) -> Check:
+def check(base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | None = None, ulps: int = 1,
+          only: set[str] | None = None) -> Check:
+    """Compare every tensor, or only those named in `only` when a whole model is too much to read."""
     deltas = Adapter(adapter) if adapter else None
     onto = targets(deltas, base) if deltas else {}
+    if only is not None:
+        onto = {n: a for n, a in onto.items() if n in only}
     results, recast = [], set()
     pairs = aligned(base, merged)
-    for name in sorted(base.tensors):
+    for name in sorted(only if only is not None else base.tensors):
+        if name not in base.tensors:
+            continue
         ref, other = base.tensors[name], pairs.get(name) or tied_head(merged, name)
         if other is None:
             results.append(TensorCheck(name, MISSING, "not in the merged model"))
@@ -312,3 +324,62 @@ def check(base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | None = Non
     added = sorted(n for n, r in merged.tensors.items() if id(r) not in taken and n not in leftover)
     return Check(results, added, leftover, deltas.ignored if deltas else [], len(deltas.pairs) if deltas else 0, recast,
                  set(onto))
+
+
+def edited_sample(base: Checkpoint, adapter: Checkpoint, count: int) -> set[str]:
+    """Edited tensors spread over the model by a hash of the name, so a rerun reads the same ones."""
+    names = sorted(targets(Adapter(adapter), base), key=lambda n: hashlib.sha1(n.encode()).hexdigest())
+    return set(names[:count])
+
+
+def check_sample(base: Checkpoint, merged: Checkpoint, adapter: Checkpoint, count: int = 12, ulps: int = 0) -> Check | None:
+    """check() on a few edited tensors, for a verdict that costs megabytes. None if the adapter edits nothing."""
+    names = edited_sample(base, adapter, count)
+    return check(base, merged, adapter, ulps, only=names) if names else None
+
+
+@dataclass
+class Candidate:
+    """One possible base for a merge, with how well the merge reproduces from it."""
+
+    spec: str
+    exact: int
+    close: int
+    off: int
+    worst: int
+    missing: int
+    paths: list[str]
+    shares: list[str] = field(default_factory=list)  # other candidates that agree with it on every sampled span
+
+    @property
+    def reproduces(self) -> bool:
+        return self.off == 0 and self.missing == 0 and self.exact + self.close > 0
+
+
+def name_base(merged: Checkpoint, adapter: Checkpoint, bases: list[Checkpoint], count: int = 12,
+              ulps: int = 1) -> list[Candidate]:
+    """Rank candidate bases by how many sampled edited tensors the merge reproduces from them.
+
+    A model card, an adapter config and a mirror can each name a different base. The merge was made from the
+    one whose tensors plus the adapter give the merged tensors back. Candidates that agree on every sampled span
+    cannot be told apart by this merge and are listed as sharing weights (sampled, not proof).
+    """
+    from .identity import BIT_IDENTICAL, NO_DIFFERENCE, identify
+
+    found = []
+    for base in bases:
+        c = check_sample(base, merged, adapter, count, ulps)
+        if c is None:
+            raise FormatError(f"{adapter.spec}: the adapter edits nothing in {base.spec}")
+        edited = [t for t in c.tensors if t.name in c.edited]
+        steps = [t.steps or 0 for t in edited if t.status in (ROUNDING, DIFFERENT)]
+        found.append(Candidate(base.spec, sum(t.status in (MERGED, IDENTICAL) for t in edited),
+                               sum(t.status == ROUNDING for t in edited),
+                               sum(t.status in (DIFFERENT, NEVER_APPLIED) for t in edited),
+                               max(steps, default=0), sum(t.status == MISSING for t in edited), c.paths))
+    for i, a in enumerate(found):
+        for j, b in enumerate(found):
+            if i < j and identify(bases[i], bases[j]).label in (BIT_IDENTICAL, NO_DIFFERENCE):
+                a.shares.append(b.spec)
+                b.shares.append(a.spec)
+    return sorted(found, key=lambda c: (c.off + c.missing, -c.exact, c.worst))
