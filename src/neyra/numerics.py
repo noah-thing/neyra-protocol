@@ -24,7 +24,8 @@ def from_float(values: np.ndarray, dtype: str) -> np.ndarray:
         rounded = (u + 0x7FFF + ((u >> 16) & 1)) >> 16
         return np.where(nan, (u >> 16) | 0x40, rounded).astype(np.uint16)
     if dtype == "F16":
-        return np.asarray(values, dtype=np.float16).view(np.uint16)
+        with np.errstate(over="ignore"):
+            return np.asarray(values, dtype=np.float16).view(np.uint16)
     if dtype == "F32":
         return np.ascontiguousarray(values, dtype=np.float32).view(np.uint32)
     if dtype == "F64":

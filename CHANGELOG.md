@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- `neyra identity` no longer fails on an install without its calibration file. It reports exact verdicts and calls the rest inconclusive.
+- `neyra tune lint` without the `tune` extra prints what to install.
+- `neyra conformance` no longer prints a numpy overflow warning.
+
 ## 0.2.2
 
 - `neyra tune lint DATA MODEL` builds the token ids and loss mask a fine-tuning trainer would use (TRL, mlx-lm, Unsloth, Axolotl, LLaMA-Factory) and reports BOS and end token problems, prompt text in the loss, truncation, template mismatches, duplicates and leakage. Needs `neyra[tune]`.

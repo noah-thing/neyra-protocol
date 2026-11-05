@@ -341,10 +341,13 @@ def cmd_hop(a) -> int:
 
 
 def cmd_tune_lint(a) -> int:
-    from .tune import report
-    from .tune.lint import lint
-    from .tune.tok import TokenizerError
-    from .tune.trainers import Unsupported
+    try:
+        from .tune import report
+        from .tune.lint import lint
+        from .tune.tok import TokenizerError
+        from .tune.trainers import Unsupported
+    except ModuleNotFoundError as e:
+        raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: pip install 'neyra[tune]'") from e
 
     try:
         r = lint(a.data, a.model, a.trainer, a.gguf, a.val, a.max_length, a.mask_prompt, a.show)

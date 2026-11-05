@@ -38,8 +38,11 @@ MATRICES = 24
 VECTORS = 4
 
 
-def calibration() -> dict:
-    return json.loads(resources.files("neyra").joinpath("identity_null.json").read_text(encoding="utf-8"))
+def calibration() -> dict | None:
+    try:
+        return json.loads(resources.files("neyra").joinpath("identity_null.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -244,6 +247,9 @@ def identify(base: Checkpoint, model: Checkpoint, *, full: bool = False, adapter
         notes.append("the adapter does not reproduce the sampled tensors" if c is not None else "no adapter tensor sampled")
     null = calibration()
     s, d = m.cos, m.rel
+    if null is None:
+        return Verdict(INCONCLUSIVE, f"median cosine {s:.3f}, relative distance {d:.3f}; this build has no calibration "
+                       "panel, so it cannot call a model derived or unrelated", False, m, note=notes)
     if s >= null["derived_min"]:
         return Verdict(DERIVED_UNKNOWN, f"sampled, not proof: median cosine {s:.3f}, relative distance {d:.3f}; unrelated siblings stay "
                        f"under {null['unrelated_max']:.3f}", False, m, note=notes)

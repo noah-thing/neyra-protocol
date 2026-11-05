@@ -16,7 +16,7 @@ One verdict, from a sample of 24 matrices read over HTTP ranges (a megabyte or t
 | unrelated | no more alike than independently trained siblings |
 | inconclusive, not comparable | between the two ranges, or the files lay their tensors out differently |
 
-"Derived" is judged against a null measured on unrelated siblings, never against a number chosen for the occasion;
-the panel, thresholds and held-out error rates are in `src/neyra/identity_null.json`, rebuilt by
-`bench/identity_panel.py`. `scripts/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
+"Derived" and "unrelated" need a null measured on unrelated sibling models. `bench/identity_panel.py` builds it into
+`src/neyra/identity_null.json`. Until that file ships, those two verdicts come back as inconclusive, with the measured
+numbers, and every exact verdict still works. `scripts/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
 takes a candidate, the allowed base and the forbidden instruct model.

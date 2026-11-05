@@ -218,3 +218,16 @@ def test_an_edit_inside_the_sampled_span_is_seen_wherever_the_span_sits(tmp_path
     edited = w["a.weight"].copy().reshape(-1)
     edited[first + n // 2] += 1.0
     assert identify(base, save(tmp_path / "b", {"a.weight": edited.reshape(100, 100)})).label != NO_DIFFERENCE
+
+
+def test_without_a_calibration_panel_it_says_so(tmp_path, rng, monkeypatch):
+    from neyra import identity as ident
+
+    monkeypatch.setattr(ident, "calibration", lambda: None)
+    a = {f"layers.{i}.w": rng.standard_normal((64, 64)).astype(np.float32) for i in range(4)}
+    b = {k: v + 0.5 * rng.standard_normal(v.shape).astype(np.float32) for k, v in a.items()}
+    save(tmp_path / "a", a)
+    save(tmp_path / "b", b)
+    v = ident.identify(Checkpoint.open(str(tmp_path / "a")), Checkpoint.open(str(tmp_path / "b")))
+    assert v.label == ident.INCONCLUSIVE and "calibration" in v.detail
+
