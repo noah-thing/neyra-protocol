@@ -397,20 +397,35 @@ def nats(x) -> str:
 
 
 def cmd_edit(a) -> int:
-    from .edit import Settings, load_requests
+    from dataclasses import replace
+
+    from .edit import Settings, Words, default_layers, load_requests, one_fact, what_it_says
     from .runtime import open_runtime
     from .workflows import edit_facts
 
     path = local_path(a.model)
-    requests = load_requests(a.requests)
+    single = a.target is not None
+    if single:
+        requests = [replace(one_fact(a.requests, a.target), neighbours=tuple(a.neighbour))]
+        a.lam = 100.0 if a.lam is None else a.lam
+    else:
+        requests = load_requests(a.requests)
     names = ("width", "solver", "lam", "batch", "steps", "lr", "contexts", "polish", "anchor", "clamp", "max_rank", "seed",
              "window", "held", "neutral")
-    settings = Settings(layers=[int(x) for x in a.layers.split(",")] if a.layers else None,
+    ck = Checkpoint.open(path)
+    layers = [int(x) for x in a.layers.split(",")] if a.layers else default_layers(ck) if single else None
+    settings = Settings(layers=layers,
                         **{n: getattr(a, n) for n in names if getattr(a, n) is not None})
     out = Path(a.out)
     ledger = Path(a.ledger or out.with_suffix(".ledger.jsonl"))
     key = read_private(a.key) if a.key else None
-    done = edit_facts(open_runtime(path, a.backend), Checkpoint.open(path), requests, settings, neutral=a.text,
+    rt = open_runtime(path, a.backend)
+    if single:
+        old = what_it_says(rt, Words(rt.tokenizer), requests[0])
+        if old.lower() == a.target.lower():
+            raise Fail(BAD_INPUT, f"the model already says {old} here")
+        requests = [replace(requests[0], true=old)]
+    done = edit_facts(rt, ck, requests, settings, neutral=a.text,
                       key=key, ledger=ledger, track=a.track)
     done.patch.save(out)
     receipt = Path(a.receipt or out.with_suffix(".receipt.json"))
@@ -426,11 +441,16 @@ def cmd_edit(a) -> int:
                 f"{r['fluency_after']:.2f}")
     text += [f"  {'pass' if ok else 'FAIL'}  {gate}" for gate, ok in r["gates"].items()]
     if b["specificity"] is None:
-        text.append("specificity was not measured: give each request neighbours and the old object (true)")
+        text.append("neighbouring facts were not measured: add --neighbour PROMPT, or use a requests file")
     if r["warning"]:
         text.append(f"warning: {r['warning']}")
-    text.append(f"verdict {done.verdict}" if done.verdict == "PASS"
-                else "verdict FAIL: this edit is not claimed as a success. The patch is written for inspection only.")
+    missed = [gate for gate, ok in r["gates"].items() if not ok]
+    if done.verdict == "PASS":
+        text.append(f"verdict {done.verdict}")
+    elif missed == ["specificity"] and b["specificity"] is None:
+        text.append(f"not claimed: the fact took, but nothing checked its neighbours. The patch is in {out}.")
+    else:
+        text.append("verdict FAIL: this edit is not claimed as a success. The patch is written for inspection only.")
     emit(a, {"path": str(out), "receipt": str(receipt), "ledger": str(ledger), "patch_id": done.patch.id, **r},
          "\n".join(text))
     return OK if done.verdict == "PASS" else FINDINGS
@@ -1015,7 +1035,11 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
 
     p = command("edit", cmd_edit, "write facts into a model as an exact, signed, revertible patch")
     p.add_argument("model")
-    p.add_argument("requests", help="JSON list of {subject, prompt with {}, target}, or CounterFact records")
+    p.add_argument("requests", help='a prompt with the subject in brackets, "The capital of [France] is", then the '
+                   "target; or a JSON file of {subject, prompt with {}, target} or CounterFact records")
+    p.add_argument("target", nargs="?", help="the new answer, when the first argument is a prompt")
+    p.add_argument("--neighbour", action="append", default=[], metavar="PROMPT",
+                   help="a prompt whose answer must not change, for a single fact")
     p.add_argument("-o", "--out", default="edit.neyra")
     p.add_argument("--receipt", help="default: beside the patch")
     p.add_argument("--ledger", help="default: beside the patch")

@@ -209,3 +209,14 @@ def test_a_saved_editor_carries_on_where_it_stopped(world, tmp_path):
     for name, bits in second.stack.tensors().items():
         assert np.array_equal(bits[0], straight[name])
     rt.reset()
+
+
+def test_what_it_says_is_the_object_the_edit_replaces(world):
+    from neyra.edit import default_layers, what_it_says
+
+    _, rt, ck, _, _ = world
+    subject = tinylm.SUBJECTS[0]
+    r = Request(subject, TEMPLATE, "x")
+    assert what_it_says(rt, Words(tinylm.Tokenizer()), r)
+    assert len(default_layers(ck)) >= 1
+

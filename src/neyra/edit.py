@@ -16,6 +16,7 @@ rounding of a small edit to bf16 is part of the loop instead of an unpleasant su
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,35 @@ def parse_request(raw: dict) -> Request:
                        _prompts(raw.get("generation_prompts")))
     return Request(raw["subject"], raw["prompt"], raw["target"], raw.get("true"),
                    _prompts(raw.get("paraphrases")), _prompts(raw.get("neighbours")), _prompts(raw.get("generation")))
+
+
+def one_fact(text: str, target: str) -> Request:
+    """A fact from the command line, with the subject in brackets: "The capital of [France] is"."""
+    hit = re.fullmatch(r"(.*)\[([^\[\]]+)\](.*)", text)
+    if not hit:
+        raise ValueError('put the subject in brackets: "The capital of [France] is"')
+    return Request(hit[2], f"{hit[1]}{{}}{hit[3]}", target)
+
+
+def what_it_says(rt, words: Words, request: Request) -> str:
+    """The first word the unedited model gives, which becomes the object the edit replaces."""
+    row = rt.generate([words.ids(request.text())], 8, Sampling(0.0), batch=1)[0]
+    found = row.text.split()
+    if not found:
+        raise ValueError("the model gave no answer to this prompt, so there is nothing to replace")
+    return found[0].strip(".,;:\"'")
+
+
+def default_layers(ck: Checkpoint) -> list[int]:
+    """Five layers where edits worked in testing: the first on a hybrid stack, a fifth of the way in otherwise.
+
+    Tracing needs several facts to mean anything, so a single fact starts here.
+    """
+    found = writers(ck).values()
+    dense = sorted({w.layer for w in found if w.kind == "mlp_down"})
+    hybrid = any("linear_attn" in name for name in ck.tensors)
+    start = 0 if hybrid else round(0.18 * len(dense))
+    return dense[start:start + 5]
 
 
 def load_requests(path: str | Path) -> list[Request]:

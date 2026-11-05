@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from neyra.edit import Request, compress, null_basis, parse_request, solve_update
+from neyra.edit import Request, compress, null_basis, one_fact, parse_request, solve_update
 
 
 def test_solve_update_meets_the_target_when_nothing_is_protected(rng):
@@ -54,3 +54,11 @@ def test_requests_read_native_and_counterfact_records():
                                                               ("Ronaldo plays",))
     with pytest.raises(ValueError):
         Request("a", "no slot", "b")
+
+
+def test_a_fact_on_the_command_line_marks_its_subject_in_brackets():
+    r = one_fact("The capital of [France] is", "Rome")
+    assert (r.subject, r.prompt, r.target) == ("France", "The capital of {} is", "Rome")
+    assert r.text() == "The capital of France is"
+    with pytest.raises(ValueError, match="brackets"):
+        one_fact("The capital of France is", "Rome")
