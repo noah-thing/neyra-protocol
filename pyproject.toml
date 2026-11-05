@@ -39,6 +39,7 @@ dev = ["pytest>=8", "transformers>=4.50", "tokenizers", "jinja2", "gguf>=0.17", 
 neyra = "neyra.cli:main"
 
 [project.urls]
+Homepage = "https://neyra.run"
 Source = "https://github.com/noah-thing/neyra-protocol"
 Documentation = "https://github.com/noah-thing/neyra-protocol/tree/main/docs"
 Changelog = "https://github.com/noah-thing/neyra-protocol/blob/main/CHANGELOG.md"
