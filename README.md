@@ -42,7 +42,7 @@ patch tied to its base model, and you can revert it bit for bit.
 </picture>
 
 `neyra tune verdict` on a public banking77 LoRA, output shortened. The model card reports a 37 point gain and says nobody
-tried a prompt. With 40 examples in the prompt the base reaches 90%, so training bought 8.5 points, and they hold down to Q2_K.
+tried a prompt. With 40 examples in the prompt the base reaches 90%, so training bought 8.5 points, and they hold in every file tested. This model's width keeps most of its "Q2_K" file at 4 and 5 bits, so that row is a milder test than its name.
 
 ## Install
 

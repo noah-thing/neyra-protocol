@@ -94,7 +94,7 @@ one run each: greedy decoding is deterministic, and the intervals are over cases
   The model card reports 60.75% to 97.75% on 400 cases and says a prompt with examples was not tried. The command gave base 62.5%,
   40-shot prompt 90.0%, tuned 98.5%, and "This worked ... +8.5 points ahead of the best free option, few-shot
   (interval +5.0 to +12.5)". With 10 examples the prompt reached 70% on the first 100 cases. F16, Q8_0 and Q4_K_M files
-  scored the same 98.5% as the adapter in torch. Q3_K_S and Q2_K scored 97.5%, two cases fewer.
+  scored the same 98.5% as the adapter in torch. Q3_K_S and Q2_K scored 97.5%, two cases fewer. Those two names flatter the result: Qwen2.5-0.5B has a hidden size of 896, K quants need rows in multiples of 256, and llama-quantize falls back for 144 of 290 tensors, so its Q2_K file holds mostly `q4_0` and `q5_0` at 5.48 bits per weight.
 - A planted case where a prompt matches: a LoRA trained for 40 steps on 32 country and capital pairs to answer in the form
   `ANSWER: <capital>`, tested on 90 other countries, on SmolLM2-360M-Instruct. It can only have learned the format.
   Base 0%, 8-shot prompt 93.3%, tuned 94.4%. At the default margin of 5 points the interval (-3.3 to +5.6) does not fit, and the
