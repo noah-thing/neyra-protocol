@@ -72,7 +72,7 @@ def test_oms_digests_match_what_model_signing_wrote(tmp_path):
     for name, body in (("a/b", "1"), ("a.txt", "2"), ("B/x", "3"), ("é", "4"), ("Z", "5")):
         path = tmp_path / name
         path.parent.mkdir(exist_ok=True)
-        path.write_text(body + "\n")
+        path.write_bytes(body.encode() + b"\n")
     files = at.file_digests(tmp_path)
     assert [f["path"] for f in files] == ["B/x", "Z", "a/b", "a.txt", "é"]
     assert at.oms_root(files) == "bb95a887e6314422fae33423a71ce013580f1cdae723f37678dac24db6c14286"
