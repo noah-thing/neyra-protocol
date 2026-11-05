@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `neyra import` reads Delta League, OpenWSP, weightspace, PEFT and ballast edits into Neyra patches, and `export` writes them back.
 - `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
 
 ## 0.2.1

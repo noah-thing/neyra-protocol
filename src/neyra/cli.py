@@ -31,6 +31,7 @@ from .check import (
 from .clock import check_claim, make_claim
 from .conformance import check_binding, check_patch
 from .diff import Report, compare
+from .formats import Unsupported
 from .hop import document as hop_document
 from .hop import render as hop_render
 from .hop import trace
@@ -515,18 +516,75 @@ def cmd_bisect(a) -> int:
     return OK if c.passed else FINDINGS
 
 
+def cmd_import(a) -> int:
+    from . import formats
+
+    base = Checkpoint.open(a.base)
+    name = a.format or formats.detect(a.source)
+    if name is None:
+        raise Fail(USAGE, f"cannot tell what format {a.source} is; name it with --format ({', '.join(formats.NAMES)})")
+    options = {}
+    if name == "delta-league" and a.identity:
+        options["identity"] = a.identity
+    if name == "peft":
+        options["merge"] = a.merge
+    patch = formats.read(name, a.source, base, **options)
+    patch.save(a.out)
+    emit(a, {"format": name, "tensors": len(patch.edits), "entries": patch.entries, "path": a.out,
+             "patch_id": patch.id, "base_root": patch.base_root, "result_root": patch.result_root},
+         f"{name}: {len(patch.edits)} tensors, {patch.entries:,} stored entries -> {a.out}\npatch {patch.id}")
+    return OK
+
+
 def cmd_export(a) -> int:
-    from .export import to_gguf_lora, to_peft
+    from . import formats
+    from .formats import ballast, deltaleague, openwsp, weightspace, wvc
 
     base = Checkpoint.open(a.base)
     patch = Patch.load(a.patch)
+    note = ""
     if a.format == "peft":
+        from .export import to_peft
+
         info = to_peft(patch, base, a.out, a.energy)
-    else:
+    elif a.format == "gguf":
+        from .export import to_gguf_lora
+
         if not a.arch:
             raise Fail(USAGE, "gguf export needs --arch, the architecture name in the base GGUF, such as qwen35")
         info = to_gguf_lora(patch, base, a.out, a.arch, a.energy)
-    emit(a, {"path": a.out, **info}, f"{info['bytes']:,} bytes -> {a.out}")
+    elif a.format == "delta-league":
+        if a.parent_meta:
+            meta = json.loads(Path(a.parent_meta).read_text())
+            parent, digest, model = meta["id"], meta["content_hash"], meta["model_id"]
+        elif a.parent_id and a.parent_hash and a.model_id:
+            parent, digest, model = a.parent_id, a.parent_hash, a.model_id
+        else:
+            raise Fail(USAGE, "delta-league export needs --parent-meta delta-model.json, "
+                              "or --parent-id, --parent-hash and --model-id")
+        manifest = deltaleague.dump(patch, base, a.out, parent, digest, model)
+        info = {"bytes": manifest["artifacts"][0]["size_bytes"], "tensors": len(manifest["tensors"])}
+    elif a.format == "openwsp":
+        manifest = openwsp.dump(patch, base, a.out, base_model=a.model_id)
+        info = {"bytes": (Path(a.out) / "edit.npz").stat().st_size, "edit_sha256": manifest["edit_sha256"]}
+    elif a.format == "weightspace":
+        weightspace.dump(patch, base, a.out)
+        info = {"bytes": Path(a.out).stat().st_size}
+    elif a.format == "ballast":
+        inexact = ballast.dump(patch, base, a.out)
+        info = {"bytes": (Path(a.out) / "model.safetensors").stat().st_size, "inexact": inexact}
+        if inexact:
+            note = f"\n{len(inexact)} tensors would not rebuild exactly under `ballast apply`: {', '.join(inexact[:3])}"
+    else:
+        before, after = wvc.dump(patch, base)
+        out = Path(a.out)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "base.manifest.json").write_text(json.dumps(before, indent=2) + "\n")
+        (out / "result.manifest.json").write_text(json.dumps(after, indent=2) + "\n")
+        info = {"base_root": before["root"], "result_root": after["root"]}
+        note = f"\nwvc roots: base {before['root']}, result {after['root']}"
+    del formats
+    emit(a, {"path": a.out, **info}, f"{info.get('bytes', 0):,} bytes -> {a.out}{note}")
     return OK
 
 
@@ -1117,11 +1175,24 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--retain", type=float, default=0.9, help="share of the effect to keep")
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
-    p = command("export", cmd_export, "write a patch as a LoRA for PEFT or llama.cpp")
+    p = command("import", cmd_import, "read an edit made by another tool as a Neyra patch")
+    p.add_argument("base")
+    p.add_argument("source", help="a file or folder in the other tool's format")
+    p.add_argument("--format", choices=formats_names(), help="default: guessed from the contents, except ballast")
+    p.add_argument("--identity", help="delta-league: the parent's identity string, to verify its content hash")
+    p.add_argument("--merge", default="peft", help="peft: the merge path whose rounding to follow")
+    p.add_argument("-o", "--out", required=True)
+
+    p = command("export", cmd_export, "write a patch as a LoRA, or in another tool's edit format")
     p.add_argument("base")
     p.add_argument("patch")
-    p.add_argument("--format", choices=["peft", "gguf"], required=True)
+    p.add_argument("--format", choices=["peft", "gguf", "delta-league", "openwsp", "weightspace", "ballast", "wvc"],
+                   required=True)
     p.add_argument("--arch", help="GGUF architecture name, for --format gguf")
+    p.add_argument("--parent-meta", help="delta-league: the delta-model.json of the parent")
+    p.add_argument("--parent-id")
+    p.add_argument("--parent-hash")
+    p.add_argument("--model-id", help="delta-league: the model config id. openwsp: the base model's name")
     p.add_argument("--energy", type=float, default=0.999, help="share of the change to keep")
     p.add_argument("-o", "--out", required=True)
 
@@ -1223,6 +1294,12 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     return ap
 
 
+def formats_names() -> tuple[str, ...]:
+    from .formats import NAMES
+
+    return NAMES
+
+
 def hub_error(e: urllib.error.HTTPError) -> str:
     repo = re.search(r"/api/models/(.+?)/revision/", e.url or "")
     name = f" for {repo[1]}" if repo else ""
@@ -1245,7 +1322,7 @@ def main(argv: list[str] | None = None, prog: str = "neyra") -> int:
             raise
         print(f"neyra: this needs {root}. Install it with: uv tool install '{EXTRAS[root]}'", file=sys.stderr)
         return ENVIRONMENT
-    except (FormatError, json.JSONDecodeError) as e:
+    except (FormatError, Unsupported, json.JSONDecodeError) as e:
         print(f"neyra: bad input: {e}", file=sys.stderr)
         return BAD_INPUT
     except (PatchMismatch, ProtocolError) as e:

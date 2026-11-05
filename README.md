@@ -85,7 +85,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 | `patch`, `apply`, `show` | Write the difference between two checkpoints as a patch, rebuild from it, inspect it |
 | [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum, TIES, DARE, SLERP and Model Stock with exact arithmetic. Order does not change the bytes |
 | [`bisect`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md) | Find the smallest part of a patch that keeps its effect |
-| `export` | Write a patch as a LoRA for PEFT or llama.cpp |
+| `import`, `export` | Read and write Delta League, OpenWSP, weightspace and ballast edits, PEFT LoRAs and GGUF LoRAs |
 
 **Inspect**
 
