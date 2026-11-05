@@ -1,4 +1,7 @@
-"""Draw the README figures. The terminal text is real output, copied from a run, not composed."""
+"""Draw the README figures. The terminal text is real output, copied from a run, not composed.
+
+social-preview.png and icon.png come from the site, so GitHub and neyra.run show the same mark.
+"""
 
 from html import escape
 from pathlib import Path
@@ -7,8 +10,8 @@ HERE = Path(__file__).parent
 MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
 SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 THEMES = {
-    "light": dict(bg="#ffffff", panel="#f6f8fa", line="#d0d7de", text="#1f2328", dim="#656d76", cell="#d8dee4", hit="#0969da", bad="#cf222e"),
-    "dark": dict(bg="#0d1117", panel="#161b22", line="#30363d", text="#e6edf3", dim="#8b949e", cell="#30363d", hit="#58a6ff", bad="#ff7b72"),
+    "light": dict(bg="#ffffff", panel="#f6f8fa", line="#d0d7de", text="#1f2328", dim="#656d76", cell="#d8dee4", hit="#1f2328", bad="#cf222e"),
+    "dark": dict(bg="#0d1117", panel="#161b22", line="#30363d", text="#e6edf3", dim="#8b949e", cell="#30363d", hit="#ffffff", bad="#ff7b72"),
 }
 
 SESSION = [
@@ -101,19 +104,6 @@ def hops(t, dark):
     return "".join(out) + "</svg>"
 
 
-def card(t, dark):
-    cells, size, gap = 5, 44, 10
-    x0, y0 = 250, 215
-    squares = []
-    for r in range(cells):
-        for c in range(cells):
-            fill = t["hit"] if (r, c) == (1, 3) else t["cell"]
-            squares.append(f'<rect x="{x0 + c * (size + gap)}" y="{y0 + r * (size + gap) - 60}" width="{size}" height="{size}" rx="5" fill="{fill}"/>')
-    word = f'<text x="540" y="330" font-family="{SANS}" font-size="170" font-weight="600" letter-spacing="-4" fill="{t["text"]}">neyra</text>'
-    line = f'<text x="640" y="500" text-anchor="middle" font-family="{SANS}" font-size="34" fill="{t["dim"]}">Tune, edit and verify local language models.</text>'
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640"><rect width="1280" height="640" fill="{t["bg"]}"/>{"".join(squares)}{word}{line}</svg>'
-
-
-for name, draw in (("logo", logo), ("terminal", terminal), ("verdict", verdict), ("hops", hops), ("card", card)):
+for name, draw in (("logo", logo), ("terminal", terminal), ("verdict", verdict), ("hops", hops)):
     for theme, colours in THEMES.items():
         (HERE / f"{name}-{theme}.svg").write_text(draw(colours, theme == "dark"))
