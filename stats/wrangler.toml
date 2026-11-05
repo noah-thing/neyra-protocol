@@ -1,0 +1,19 @@
+name = "neyra-stats"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Request logs and traces stay off so no request metadata is kept.
+[observability]
+enabled = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "neyra-stats"
+database_id = "FILL_IN_AFTER_wrangler_d1_create"
+
+# Needs the Workers rate limiting binding. Check that the free plan includes it before deploying.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

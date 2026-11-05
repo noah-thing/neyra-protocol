@@ -378,5 +378,7 @@ def lint_gate(opts: Options, model: str, say=print) -> Report:
 
         say("")
         say(text.render(report))
-        raise Stop("lint found errors in the data (pass --force to train anyway)", "check")
+        stop = Stop("lint found errors in the data (pass --force to train anyway)", "check")
+        stop.report = report
+        raise stop
     return report

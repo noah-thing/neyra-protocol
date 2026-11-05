@@ -349,14 +349,17 @@ def cmd_check(a) -> int:
 def cmd_hop(a) -> int:
     if a.predict:
         return cmd_forecast(a)
+    from .tune import share
+
     verdict = trace(a.artifacts, a.ulps)
     emit(a, hop_document(verdict), hop_render(verdict))
+    share.offer(lambda: share.build_hop(verdict, a.artifacts[0]), a.json)
     return OK if verdict.ok else FINDINGS
 
 
 def cmd_tune_lint(a) -> int:
     try:
-        from .tune import report
+        from .tune import report, share
         from .tune.lint import lint
         from .tune.tok import TokenizerError
         from .tune.trainers import Unsupported
@@ -372,12 +375,13 @@ def cmd_tune_lint(a) -> int:
             raise
         raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[tune]'") from e
     emit(a, report.document(r), report.render(r))
+    share.offer(lambda: share.build_lint(r, a.model), a.json)
     return FINDINGS if r.errors else OK
 
 
 def cmd_tune_verdict(a) -> int:
     from .tune import cases as cases_mod
-    from .tune import prompts, verdict, verdict_report
+    from .tune import prompts, share, verdict, verdict_report
     from .tune.engines import EngineError, open_backends
 
     try:
@@ -420,11 +424,36 @@ def cmd_tune_verdict(a) -> int:
     if a.save:
         Path(a.save).write_text(json.dumps({"schema": SCHEMA, **doc}, indent=2))
     emit(a, doc, verdict_report.render(r))
+    share.offer(lambda: share.build_verdict(r, a.base), a.json)
     return OK if r.passed else FINDINGS
 
 
+def cmd_stats(a) -> int:
+    from .tune import share
+
+    if a.action == "show":
+        last = share.last_report()
+        emit(a, {"report": json.loads(last) if last else None},
+             last.rstrip() if last else "No report has been sent from this machine.")
+        return OK
+    if a.action in ("on", "off"):
+        try:
+            share.write_choice("ask" if a.action == "on" else "no")
+        except OSError as e:
+            raise Fail(ENVIRONMENT, f"cannot write {share.config_dir() / 'stats.json'}: {e}") from e
+    choice = share.read_choice()
+    env = share.opted_out()
+    state = ("off: NEYRA_NO_STATS or DO_NOT_TRACK is set" if env else
+             {"ask": "not decided: asks once, after the next result in a terminal",
+              "yes": "on: sends an anonymous report after results in a terminal", "no": "off"}[choice])
+    where = "set" if share.ENDPOINT else "not set in this build, so nothing is asked or sent"
+    emit(a, {"choice": choice, "environment_opt_out": env, "endpoint_set": bool(share.ENDPOINT)},
+         f"stats {state}\nreceiver {where}\nsetting {share.config_dir() / 'stats.json'}")
+    return OK
+
+
 def cmd_tune_train(a) -> int:
-    from .tune import train
+    from .tune import share, train
 
     try:
         train.require_apple()
@@ -440,8 +469,12 @@ def cmd_tune_train(a) -> int:
             raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[tune,mlx]'") from e
         result = train.run(opts, Path(path), report)
     except train.Stop as e:
+        gate = getattr(e, "report", None)
+        if gate is not None:
+            share.offer(lambda: share.build_train(a.model, gate), a.json)
         raise Fail({"environment": ENVIRONMENT, "check": FINDINGS}.get(e.kind, BAD_INPUT), str(e)) from e
     emit(a, train.summary_document(result), train.ending(result))
+    share.offer(lambda: share.build_train(a.model, report, result), a.json)
     return OK
 
 
@@ -1398,6 +1431,10 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
 
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
+
+    p = command("stats", cmd_stats, "opt-in anonymous stats for tune verdict: status, show the last report, on, off")
+    p.add_argument("action", nargs="?", choices=["show", "on", "off"],
+                   help="show: print the last report sent; on: ask after the next verdict; off: never ask or send")
 
     tune = command("tune", None, "check a fine-tuning run before it starts and judge it afterwards")
     tune_sub = tune.add_subparsers(dest="tune_cmd", required=True)

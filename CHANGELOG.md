@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Opt-in anonymous stats for `tune verdict`, `tune lint`, `tune train` and `hop`, asked once in a terminal and off in CI, with `--json` and under `NEYRA_NO_STATS` or `DO_NOT_TRACK`. `neyra stats` shows the state, `stats show` prints the last report, `stats off` turns it off. See docs/stats.md. Nothing is asked until a receiver URL is set in the build.
+
 ## 0.3.0
 
 - `neyra tune verdict BASE TUNED CASES --examples FILE` scores the base, the base with a few-shot prompt, the tuned model (adapter or merged weights) and quantized GGUF files on your own cases, paired, with bootstrap intervals, then says in one sentence whether it worked, whether a prompt does the same, or whether the gain is lost in a file. It also reports a general question check, KL on neutral text and the cases that got worse. Exit 1 when the tuned model did not beat the best free option. Needs `neyra[torch,tune]`; quantized files need llama.cpp's `llama-server`.
