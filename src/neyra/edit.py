@@ -121,6 +121,7 @@ class Settings:
     null_energy: float = 0.99  # the null space drops directions holding this share of neutral variance
     batch: int = 100
     contexts: int = 2  # generated prefixes added to the plain prompt when learning keys and values
+    spread: str = "mean"  # "mean": one key per fact, averaged over contexts. "each": every context writes its own key
     value_contexts: int | None = None  # fewer for the value descent, whose memory grows with rows. None: all
     steps: int = 20
     lr: float = 0.25  # of the typical size of one coordinate of the MLP output
@@ -342,11 +343,20 @@ class Editor:
                 at.append(pos)
         return out, at
 
-    def activations(self, batch: list[Request], layer: int, kind: str, contexts: list[str]) -> np.ndarray:
-        """Mean over contexts of an activation at each subject's last token: [requests, width]."""
+    def activations(self, batch: list[Request], layer: int, kind: str, contexts: list[str],
+                    keep: bool = False) -> np.ndarray:
+        """Mean over contexts of an activation at each subject's last token: [requests, width].
+
+        With `keep` the contexts stay apart: [requests * contexts, width], the contexts of a request together.
+        """
         rows, at = self.rows(batch, contexts)
-        got = self.rt.gather(rows, [layer], kind, at)[layer]
-        return got.reshape(len(batch), len(contexts), -1).mean(axis=1).astype(np.float64)
+        got = self.rt.gather(rows, [layer], kind, at)[layer].astype(np.float64)
+        return got if keep else got.reshape(len(batch), len(contexts), -1).mean(axis=1)
+
+    def keys(self, batch: list[Request], layer: int) -> tuple[np.ndarray, int]:
+        """Keys as columns, and how many columns each request owns."""
+        each = self.s.spread == "each"
+        return self.activations(batch, layer, "mlp", self.contexts, keep=each).T, (len(self.contexts) if each else 1)
 
     def pristine(self, batch: list[Request], layer: int) -> np.ndarray:
         """MLP outputs of the unedited model, which anchor how large a value may grow."""
@@ -433,9 +443,9 @@ class Editor:
         passes = self.layers + [last] * s.polish
         gaps = []
         for i, l in enumerate(passes):
-            keys = self.activations(batch, l, "mlp", self.contexts).T
+            keys, copies = self.keys(batch, l)
             now = self.activations(batch, last, "out", [""])
-            resid = (z - now).T / (len(passes) - i if i < len(self.layers) else 1)
+            resid = np.repeat((z - now).T, copies, axis=1) / (len(passes) - i if i < len(self.layers) else 1)
             gaps.append(float(np.linalg.norm(z - now) / np.sqrt(len(batch))))
             past = self.past.get(l) if s.solver != "memit" else None
             left, right = solve_update(keys, resid, self.cov[l], past, s.lam, s.ridge, self.basis.get(l))
@@ -443,7 +453,7 @@ class Editor:
             self.rt.set_tensors(self.stack.tensors())
         if s.solver != "memit":
             for l in self.layers:
-                keys = self.activations(batch, l, "mlp", self.contexts).T
+                keys, _ = self.keys(batch, l)
                 self.past[l] += keys @ keys.T
         after = self.activations(batch, last, "out", [""])
         self.written += len(batch)

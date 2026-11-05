@@ -20,7 +20,17 @@ from .edit import (
     second_moments,
     trace,
 )
-from .editeval import Limits, Neutral, fluency, judge, probe, statements, summary
+from .editeval import (
+    Limits,
+    Neutral,
+    fluency,
+    judge,
+    live,
+    live_summary,
+    probe,
+    statements,
+    summary,
+)
 from .families import editable_warning
 from .ledger import Ledger, tally
 from .patch import Patch, diff_tensor
@@ -139,8 +149,6 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
                ledger: Path | None = None, track: bool = False, say: Callable[[str], None] = on_stderr) -> Edited:
     """Write the requests into the model as a patch, measure it, and say plainly whether it earned a pass."""
     s, limits = settings or Settings(), limits or Limits()
-    if not hasattr(runtime, "delta_loss"):
-        raise ValueError("editing needs gradients through the model, which only the MLX backend provides so far")
     words = Words(runtime.tokenizer)
     log = Ledger(ledger or Path(tempfile.mkdtemp()) / "edit.ledger.jsonl")
     requested = digest("edit/requests", jcs(plain([asdict(r) for r in requests])))
@@ -163,6 +171,7 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
     check_layers(ck, layers)
     before = probe(runtime, words, requests)
     quiet = fluency(runtime, words, requests)
+    spoken_before = live_summary(requests, live(runtime, words, requests, wide=True))
     reference = Neutral(runtime, held)
     cov = second_moments(runtime, fit, layers)
     say(f"covariance from {len(fit)} windows, baseline efficacy {summary(before)['efficacy']}")
@@ -188,6 +197,7 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
     after = probe(runtime, words, requests)
     drift = reference.drift(runtime)
     loud = fluency(runtime, words, requests)
+    spoken_after = live_summary(requests, live(runtime, words, requests, wide=True))
     for e in patch.invert(ck).edits:
         e.apply(edited[e.name])  # raises unless the inverse restores the base digest
     runtime.reset()
@@ -197,7 +207,8 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
     b, a = summary(before), summary(after)
     report = {"layers": layers, "before": b, "after": a, "neutral_kl": float(drift["kl"].mean()),
               "neutral_nll_change": float(drift["nll"].mean()), "fluency_before": quiet, "fluency_after": loud,
-              "gates": gates, "verdict": verdict, "limits": asdict(limits), "curve": curve,
+              "live_before": spoken_before, "live_after": spoken_after, "gates": gates, "verdict": verdict,
+              "limits": asdict(limits), "curve": curve,
               "trace": None if traced is None else {"effect": traced.effect.tolist(), "used": traced.used},
               "stored_entries": patch.entries, "ranks": {e.name: int(e.left.shape[1]) for e in patch.edits},
               "warning": editable_warning(ck)}
@@ -214,6 +225,7 @@ def edit_facts(runtime, ck: Checkpoint, requests: list[Request], settings: Setti
         **accounting(tally(log.path, "edit_start"), "edit runs"),
         "edit": plain({"layers": layers, "settings": asdict(s), "before": b, "after": a,
                        "neutral_kl": report["neutral_kl"], "fluency": [quiet, loud],
+                       "live": [spoken_before, spoken_after],
                        "requests": [{"subject": r.subject, "prompt": r.prompt, "target": r.target, "true": r.true}
                                     for r in requests]}),
     }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import platform
+import sys
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -51,8 +53,13 @@ class DeltaBatch:
     ref: np.ndarray  # [number of KL items, vocabulary]
 
 
+def apple_silicon() -> bool:
+    return sys.platform == "darwin" and platform.machine() == "arm64"
+
+
 def open_runtime(path: str, backend: str = "auto"):
-    if backend in ("auto", "mlx"):
+    """MLX on Apple Silicon when it is installed, torch everywhere else."""
+    if backend == "mlx" or (backend == "auto" and apple_silicon()):
         try:
             from .mlx import MlxRuntime
 

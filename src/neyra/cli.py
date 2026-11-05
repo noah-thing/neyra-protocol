@@ -472,6 +472,10 @@ def cmd_edit(a) -> int:
     for name in ("efficacy", "paraphrase", "specificity", "exact", "score"):
         text.append(f"{name:12} {percent(b[name]):>7} -> {percent(c[name]):>7}")
     text.append(f"{'margin':12} {nats(b['margin']):>7} -> {nats(c['margin']):>7}")
+    for name in ("efficacy", "paraphrase"):
+        was, now = r["live_before"][name], r["live_after"][name]
+        if was is not None and now is not None:
+            text.append(f"{'decoded ' + name[:4]:12} {percent(was):>7} -> {percent(now):>7}")
     text.append(f"neutral text: KL {r['neutral_kl']:.4f} nats/token, fluency {r['fluency_before']:.2f} -> "
                 f"{r['fluency_after']:.2f}")
     text += [f"  {'pass' if ok else 'FAIL'}  {gate}" for gate, ok in r["gates"].items()]
@@ -1163,7 +1167,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--max-rank", type=int, dest="max_rank")
     p.add_argument("--seed", type=int)
     p.add_argument("--track", action="store_true", help="measure after every batch, to see sequential decay")
-    p.add_argument("--backend", default="mlx", choices=["mlx"])
+    p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
 
     p = command("bisect", cmd_bisect, "find the smallest part of a patch that keeps its effect")
     p.add_argument("model")

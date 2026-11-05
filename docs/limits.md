@@ -10,7 +10,9 @@
 - Models with several residual streams, such as DeepSeek V4, or a norm after each write, such as
   Gemma 4, are recognised, but direction edits on them are untested.
 - Everything here has been tested on small Qwen3.5 and Qwen3 models. Larger models are untested.
-- `neyra edit` needs MLX, edits dense MLP layers only, and its AlphaEdit style `--solver null` lost to the default in every run.
+- `neyra edit` edits dense MLP layers only, and its AlphaEdit style `--solver null` lost to the default in every run. It runs on MLX and on torch,
+  but the benchmark numbers in [the edit guide](edit.md) come from MLX. On torch one fact has been edited on one real model
+  (Qwen3-0.6B, on a CPU, 368 s). CUDA, MPS, hybrid stacks such as Qwen3.5 and batches of facts on a real model are untested there.
 - `neyra merge` of two edit patches is exact but returns a dense patch, since Annex A has no way to merge low-rank factors.
 - The lab keeps honest agents honest. An agent with shell access to the same machine could read the
   holdout from disk, so adversarial use needs the server on another host.

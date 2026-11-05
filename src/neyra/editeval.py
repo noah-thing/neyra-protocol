@@ -10,6 +10,7 @@ the edit's fault.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -77,6 +78,79 @@ def summary(p: dict[str, np.ndarray]) -> dict[str, float | int | None]:
     out["margin"] = float(gap.mean()) if len(gap) and not np.isnan(gap).any() else None
     out.update(n_edit=len(p["edit_new"]), n_para=len(p["para_new"]), n_near=len(p["near_new"]))
     return out
+
+
+def words_of(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.casefold()))
+
+
+def appears(text: str, obj: str) -> bool:
+    """Whether the object shows up as whole words in a generated continuation, ignoring case and punctuation."""
+    needle = words_of(obj)
+    return bool(needle) and f" {needle} " in f" {words_of(text)} "
+
+
+def first_sentence(text: str) -> str:
+    """The text up to the first full stop or line break, where EasyEdit's decoding script stops generating."""
+    return re.split(r"\.|\n", text, maxsplit=1)[0]
+
+
+def live_scores(target: str, true: str | None, spoken: dict, stop: bool = False) -> dict[str, float | None]:
+    """Live decoding scores of one fact (The Mirage of Model Editing, ACL 2025).
+
+    The probability comparison above asks whether the new object is the likelier of two given ones. This asks
+    what the model says when it is left to decode: no teacher forcing, and no cut at the length of the target.
+    `spoken` holds the greedy continuations: "edit" (one text), "para", and optionally "near" (prompts about
+    other subjects, whose answer should stay `true`) and "gen" (open prompts about the subject). With `stop`
+    every text is cut at its first sentence, as EasyEdit does.
+    """
+    def share(obj, texts):
+        if isinstance(texts, str):
+            texts = [texts]
+        texts = [first_sentence(t) for t in texts or []] if stop else texts or []
+        return float(np.mean([appears(t, obj) for t in texts])) if obj and texts else None
+
+    return {"efficacy": share(target, spoken["edit"]), "paraphrase": share(target, spoken["para"]),
+            "old_efficacy": share(true, spoken["edit"]), "old_paraphrase": share(true, spoken["para"]),
+            "neighbours": share(true, spoken.get("near")), "leak": share(target, spoken.get("near")),
+            "free": share(target, spoken.get("gen"))}
+
+
+def live(rt, words: Words, requests: list[Request], tokens: int = 24, batch: int = 16, wide: bool = False) -> list[dict]:
+    """Greedy continuations of the edit prompt and of each paraphrase, one entry per request.
+
+    `wide` adds the first six neighbour prompts (16 tokens) and the first two generation prompts (40 tokens).
+    """
+    def run(per_request, n):
+        prompts, owner = [], []
+        for i, texts in enumerate(per_request):
+            for p in texts:
+                prompts.append(words.ids(p))
+                owner.append(i)
+        rows = rt.generate(prompts, n, Sampling(0.0), batch=batch) if prompts else []
+        out: list[list[str]] = [[] for _ in per_request]
+        for i, row in zip(owner, rows):
+            out[i].append(row.text)
+        return out
+
+    got = run([(r.text(), *r.paraphrases) for r in requests], tokens)
+    out = [{"edit": g[0], "para": g[1:]} for g in got]
+    if wide:
+        for key, picks, n in (("near", [r.neighbours[:6] for r in requests], 16),
+                              ("gen", [r.generation[:2] for r in requests], 40)):
+            for o, g in zip(out, run(picks, n)):
+                o[key] = g
+    return out
+
+
+def live_summary(requests: list[Request], texts: list[dict], stop: bool = False) -> dict[str, float | None]:
+    got = [live_scores(r.target, r.true, t, stop) for r, t in zip(requests, texts)]
+
+    def mean(key):
+        vals = [g[key] for g in got if g[key] is not None]
+        return float(np.mean(vals)) if vals else None
+
+    return {k: mean(k) for k in got[0]} if got else {}
 
 
 def ngram_entropy(tokens: list[int]) -> float:

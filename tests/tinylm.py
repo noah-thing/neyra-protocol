@@ -1,34 +1,15 @@
 """Small random MLX language models with a checkpoint on disk, for exercising the editing engine."""
 
 import json
-import re
 
 import mlx.core as mx
 import numpy as np
 from mlx.utils import tree_flatten
 from mlx_lm.models import qwen3, qwen3_5
+from tinydata import VOCAB, Tokenizer, corpus, facts
 
 from neyra.patch import write_safetensors
 from neyra.runtime import mlx as runtime_mlx
-
-VOCAB = 128
-
-
-class Tokenizer:
-    """One token per word, so a fact's object is a single token as it often is in a real vocabulary."""
-
-    eos_token_ids = frozenset({0})
-
-    def __init__(self):
-        words = ["Capital:", "Tongue:", "."] + SUBJECTS + CAPITALS + TONGUES
-        self.vocab = {w: i + 1 for i, w in enumerate(words)}
-        self.words = {i: w for w, i in self.vocab.items()}
-
-    def encode(self, text, add_special_tokens=False):
-        return [self.vocab.get(w, 60 + sum(map(ord, w)) % 60) for w in re.findall(r"[^\s.]+|\.", text)]
-
-    def decode(self, ids):
-        return " ".join(self.words.get(i, "?") for i in ids)
 
 
 def build(kind: str, layers: int = 4, hidden: int = 64):
@@ -71,19 +52,6 @@ def runtime(model):
     return rt
 
 
-SUBJECTS = ["Aldo", "Brem", "Cyra", "Dovo", "Elia", "Fenn", "Gorn", "Hale", "Ivor", "Jask", "Kiro", "Lund",
-            "Mace", "Nolo", "Orin", "Pell", "Quin", "Rhee", "Sorn", "Tavi", "Ulan", "Vesk", "Wren", "Xavo"]
-CAPITALS = ["Paris", "Rome", "Oslo", "Lima", "Kiev", "Baku"]
-TONGUES = ["Latin", "Greek", "Welsh", "Dutch", "Czech", "Hindi"]
-RELATIONS = ("Capital: {}", CAPITALS), ("Tongue: {}", TONGUES)
-
-
-def facts():
-    """Every subject has one capital and one language, assigned by a fixed shuffle."""
-    rng = np.random.default_rng(5)
-    return {(i, s): rng.choice(objects) for i, (_, objects) in enumerate(RELATIONS) for s in SUBJECTS}
-
-
 def trained(kind: str = "dense", steps: int = 115):
     """A tiny model that has learned the facts above, so that editing one has a measurable effect."""
     import mlx.optimizers as optim
@@ -91,11 +59,8 @@ def trained(kind: str = "dense", steps: int = 115):
 
     model, config = build(kind, layers=4, hidden=96)
     known = facts()
-    texts = [RELATIONS[i][0].replace("{}", s) + " " + o + "." for (i, s), o in known.items()]
-    ids = [Tokenizer().encode(t) for t in texts]
-    width = max(map(len, ids))
-    data = mx.array([t + [0] * (width - len(t)) for t in ids])
-    mask = mx.array([[1.0] * len(t) + [0.0] * (width - len(t)) for t in ids])[:, 1:]
+    data, mask = (mx.array(a) for a in corpus(known))
+    mask = mask[:, 1:]
     opt = optim.Adam(1e-2)
 
     def loss(m):

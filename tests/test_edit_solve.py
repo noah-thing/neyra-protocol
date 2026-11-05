@@ -62,3 +62,16 @@ def test_a_fact_on_the_command_line_marks_its_subject_in_brackets():
     assert r.text() == "The capital of France is"
     with pytest.raises(ValueError, match="brackets"):
         one_fact("The capital of France is", "Rome")
+
+
+def test_live_hit_needs_the_whole_object_and_ignores_case_and_punctuation():
+    from neyra.editeval import appears, live_scores
+
+    assert appears("It is, in fact, Rome.", "rome")
+    assert not appears("Romeo and Juliet", "Rome")
+    assert appears("the New  York Times", "New York")
+    assert not appears("anything", "")
+    spoken = {"edit": "Paris, then Rome", "para": ["Rome", "Madrid"], "near": ["Paris.", "Rome"]}
+    got = live_scores("Rome", "Paris", spoken)
+    assert got["efficacy"] == 1.0 and got["paraphrase"] == 0.5 and got["neighbours"] == 0.5 and got["leak"] == 0.5
+    assert live_scores("Rome", "Paris", {"edit": "Paris. Rome", "para": []}, stop=True)["efficacy"] == 0.0

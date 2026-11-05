@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
+
+- `neyra edit` runs on torch, so Linux, Windows and CPU work as well as Apple Silicon. Benchmark numbers still come from MLX.
+- `neyra edit` scores live decoding as well as logits.
+- Tests run on Windows.
 
 - `neyra import` reads Delta League, OpenWSP, weightspace, PEFT and ballast edits into Neyra patches, and `export` writes them back.
 - `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per-tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.

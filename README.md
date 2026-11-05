@@ -52,7 +52,7 @@ neyra demo
 ```
 
 Needs Python 3.10 or later. The base install handles patches, diffs and verification with numpy and cryptography. To
-run models, add `neyra[mlx]` on Apple Silicon or `neyra[torch]` elsewhere. `neyra edit` needs MLX. `neyra doctor`
+run models, add `neyra[mlx]` on Apple Silicon or `neyra[torch]` elsewhere. `neyra edit` runs on both. `neyra doctor`
 lists the backends you have.
 
 `neyra demo` takes about 0.1 s and downloads nothing. It builds a toy model and a LoRA in memory, then runs `check` on
@@ -65,7 +65,8 @@ Paths and Hugging Face repo names both work.
 ```sh
 neyra probe MODEL                             # loops, runaway thinking, missing answers
 neyra fix MODEL -o fix.neyra                  # candidate patch for a loop direction
-neyra edit MODEL facts.json -o edit.neyra     # write facts, measure, sign
+neyra edit MODEL "The capital of [France] is" Rome   # write one fact
+neyra edit MODEL facts.json -o edit.neyra     # write many facts, measure, sign
 neyra apply MODEL edit.neyra -o edited-model  # rebuild, checking digests
 
 neyra diff BASE OTHER --sample 4              # compare two checkpoints from a few percent of the bytes
