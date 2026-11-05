@@ -211,6 +211,8 @@ def diff_tensor(name: str, dtype: str, base: np.ndarray, edited: np.ndarray) -> 
 
     w0 = to_float(base, dtype).astype(np.float64)
     d = to_float(edited, dtype).astype(np.float64).reshape(base.shape) - w0
+    if not np.isfinite(d).all():
+        return sparse
     u, s, vh = np.linalg.svd(d, full_matrices=False)
     budget = len(idx) * (8 + ITEMSIZE[dtype])
     for rank in (r for r in (1, 2, 4, 8) if r <= len(s)):

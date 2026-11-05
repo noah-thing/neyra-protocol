@@ -96,3 +96,10 @@ def test_meta_does_not_change_identity(model_dir, rng):
     a, b, *_ = pair(model_dir, rng)
     p, q = make_patch(a, b, {"note": "x"}), make_patch(a, b, {"note": "y"})
     assert p.id == q.id
+
+
+def test_a_tensor_that_became_infinite_still_makes_an_exact_patch():
+    base = np.zeros((32, 32), np.float32).view(np.uint32)
+    edited = np.full((32, 32), np.inf, np.float32).view(np.uint32)
+    edit = diff_tensor("w", "F32", base, edited)
+    assert np.array_equal(edit.apply(base), edited)

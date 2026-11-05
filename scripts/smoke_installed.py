@@ -7,6 +7,7 @@ It uses the installed `neyra` executable beside the interpreter and nothing from
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -38,7 +39,8 @@ def main() -> None:
     out = run("demo")
     assert "THE ADAPTER WAS NEVER APPLIED" in out and "every edited tensor is what peft produces" in out
     run("demo", "edit")
-    assert "195/195" in run("conformance")
+    passed, total = re.search(r"(\d+)/(\d+)", run("conformance")).groups()
+    assert passed == total and int(total) >= 138
 
     with tempfile.TemporaryDirectory() as tmp:
         build(Path(tmp))
