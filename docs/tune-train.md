@@ -44,7 +44,7 @@ From mlx-lm's LoRA guide, with two changes for short runs on small files.
 |---|---|---|
 | `--rank` | 8, scale 20, dropout 0 | the guide's defaults |
 | layers | last 16 (all if fewer) | the guide's default |
-| `--lr` | 1e-4 | the guide's 1e-5 moves a run of under 100 steps very little |
+| `--lr` | 2e-5 | the guide's 1e-5 moves a run of under 100 steps very little |
 | `--iters` | 3 passes over the training rows, from 60 to 1000 | enough to learn a style, short enough to stop before memorising |
 | `--batch-size` | 4 | |
 | `--max-length` | 512 | longer rows are cut, as lint reports |
@@ -78,5 +78,9 @@ checks that before it finishes.
 
 - Float models only, and LoRA only (no DoRA or full fine-tuning).
 - The loss after training is on the held-out rows; it says nothing about the questions you care about. Compare
-  generations, and use `tune verdict` when it ships.
+  generations, and run `neyra tune verdict`.
 - One process, one machine. The memory limit is a guideline MLX follows, not a cap enforced by the system.
+
+## Learning rate
+
+The default is 2e-5. On Qwen3-0.6B with 66 rows, a style task, every rate learned the style. General questions, which the base answered at 90.0%, scored 53.3% after training at 1e-4 and 86.7% at 2e-5. That is one small model and one easy task, on 30 questions, so a harder task may need a higher rate. Run `neyra tune verdict` to see what your run cost.

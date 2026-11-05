@@ -220,7 +220,7 @@ def test_post_is_bounded_and_silent(monkeypatch):
     assert share.post({"a": 1}, "http://example.com/") is False and share.post({"a": 1}, "ftp://x/") is False
 
 
-def test_the_shipped_build_has_no_endpoint():
+def test_the_shipped_build_points_at_the_receiver():
     assert share.ENDPOINT.startswith("https://") and share.ENDPOINT.endswith("/v1/report")
 
 

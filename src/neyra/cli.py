@@ -80,7 +80,7 @@ Order: tune lint for the mlx trainer (stops on an error unless --force), LoRA tr
 the adapter's factors, a check of what it builds against base plus adapter, and a plain summary. The base model is never written to.
 
 Defaults, from mlx-lm's LoRA guide and sized for a few dozen to a few thousand rows:
-  rank 8, scale 20, dropout 0, the last 16 layers (all, if fewer), Adam at 1e-4 (the guide's 1e-5 barely moves a
+  rank 8, scale 20, dropout 0, the last 16 layers (all, if fewer), Adam at 2e-5 (the guide's 1e-5 barely moves a
   run of under 100 steps), batch 4, rows cut at 512 tokens, 3 passes over the data. A tenth of the rows is held
   out for the loss before and after. MLX is told to stay under 60% of RAM, and gradient checkpointing turns on
   when the weights take over a quarter of that, so a 16 GB Mac can train a model up to about 4B parameters.
@@ -1484,7 +1484,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("-o", "--out", required=True, help="a new folder for the adapter, the patch and run.json")
     p.add_argument("--iters", type=int, metavar="N", help="training steps (default: 3 passes over the data, 60 to 1000)")
     p.add_argument("--rank", type=int, default=8, help="LoRA rank (default: 8)")
-    p.add_argument("--lr", type=float, default=1e-4, help="learning rate (default: 1e-4)")
+    p.add_argument("--lr", type=float, default=2e-5, help="learning rate (default: 2e-5)")
     p.add_argument("--val", metavar="FILE", help="validation jsonl (default: a tenth of the data is held out)")
     p.add_argument("--mask-prompt", action="store_true", help="train on the answers only")
     p.add_argument("--force", action="store_true", help="train even when tune lint reports errors")
