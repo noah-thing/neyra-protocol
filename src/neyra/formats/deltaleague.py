@@ -94,7 +94,7 @@ def read_artifact(path: Path) -> dict:
 
 def load(path: str | Path, base: Checkpoint, identity: str | None = None) -> Patch:
     root = Path(path)
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     check_manifest(manifest)
     art = manifest["artifacts"][0]
     weights = root / WEIGHTS

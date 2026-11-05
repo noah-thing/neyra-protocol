@@ -1,6 +1,7 @@
 """Wrong input, as a new user would give it, must end in a one line message and an exit code, never a traceback."""
 
 import shlex
+import sys
 
 import pytest
 
@@ -61,6 +62,8 @@ BAD = [
 
 @pytest.mark.parametrize("line", BAD)
 def test_wrong_input_gets_a_message_not_a_traceback(world, line, capsys, monkeypatch):
+    if sys.platform == "win32" and "/nonexistent" in line:
+        pytest.skip("Windows creates the folder, so the path is not wrong input there")
     monkeypatch.chdir(world)
     monkeypatch.setenv("HF_ENDPOINT", "http://127.0.0.1:9")
     try:

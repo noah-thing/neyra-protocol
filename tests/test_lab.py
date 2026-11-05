@@ -165,7 +165,7 @@ def test_allowed_directory_is_opt_in(tmp_path, model_dir, rng):
 
 def test_jsonl_survives_unicode_line_separators(tmp_path):
     p = tmp_path / "x.jsonl"
-    p.write_text(json.dumps({"problem": "a\u2028b"}, ensure_ascii=False) + "\n")
+    p.write_text(json.dumps({"problem": "a\u2028b"}, ensure_ascii=False) + "\n", encoding="utf-8")
     assert read_jsonl(p) == [{"problem": "a\u2028b"}]
 
 

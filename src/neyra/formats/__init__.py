@@ -51,7 +51,7 @@ def detect(path: str) -> str | None:
     if (p / "adapter_config.json").exists():
         return "peft"
     if (p / "manifest.json").exists():
-        m = json.loads((p / "manifest.json").read_text())
+        m = json.loads((p / "manifest.json").read_text(encoding="utf-8"))
         if m.get("schema_version") == "delta.submission.v1":
             return "delta-league"
         if m.get("format") == "openwsp.edit" or (p / "edit.npz").exists():

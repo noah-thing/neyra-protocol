@@ -197,9 +197,9 @@ def test_an_unreadable_ledger_fails_grading(tmp_path, world):
     org, rt = world
     root = play(org, oracle(org.truth), rt, tmp_path / "runs")
     ledger = root / "ledger.jsonl"
-    lines = ledger.read_text().split("\n")
+    lines = ledger.read_bytes().split(b"\n")
     del lines[1]
-    ledger.write_text("\n".join(lines))
+    ledger.write_bytes(b"\n".join(lines))
     with pytest.raises(Exception, match="follow"):
         grade(org, root, rt)
 

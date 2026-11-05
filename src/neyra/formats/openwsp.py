@@ -61,7 +61,7 @@ def verify_v1(manifest: dict, arrays: dict[str, np.ndarray]) -> None:
 
 def load(path: str | Path, base: Checkpoint) -> Patch:
     root = Path(path)
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     arrays = read_arrays(root / "edit.npz")
     versioned = manifest.get("format") == FORMAT
     if versioned:

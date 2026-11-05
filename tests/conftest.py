@@ -31,7 +31,7 @@ def model_dir(tmp_path, rng):
         d.mkdir()
         write_safetensors(d / "model.safetensors", tensors, {"format": "pt"}, "BF16")
         for path, body in (files or {"config.json": json.dumps({"hidden_size": 64})}).items():
-            (d / path).write_text(body)
+            (d / path).write_bytes(body.encode())
         return d
 
     return make

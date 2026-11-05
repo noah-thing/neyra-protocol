@@ -39,7 +39,7 @@ VECTORS = 4
 
 
 def calibration() -> dict:
-    return json.loads(resources.files("neyra").joinpath("identity_null.json").read_text())
+    return json.loads(resources.files("neyra").joinpath("identity_null.json").read_text(encoding="utf-8"))
 
 
 @dataclass(frozen=True)

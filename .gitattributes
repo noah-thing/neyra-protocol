@@ -1,0 +1,2 @@
+spec/vectors/** -text
+tests/fixtures/** -text

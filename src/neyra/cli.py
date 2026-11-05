@@ -555,7 +555,7 @@ def cmd_export(a) -> int:
         info = to_gguf_lora(patch, base, a.out, a.arch, a.energy)
     elif a.format == "delta-league":
         if a.parent_meta:
-            meta = json.loads(Path(a.parent_meta).read_text())
+            meta = json.loads(Path(a.parent_meta).read_text(encoding="utf-8"))
             parent, digest, model = meta["id"], meta["content_hash"], meta["model_id"]
         elif a.parent_id and a.parent_hash and a.model_id:
             parent, digest, model = a.parent_id, a.parent_hash, a.model_id
