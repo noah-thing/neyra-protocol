@@ -116,6 +116,8 @@ def build(lab: Lab) -> MCPServer:
         """Write a candidate as a PEFT adapter (format peft) or a llama.cpp LoRA (format gguf, needs arch)."""
         patch = lab.candidate(candidate).patch
         target = inside(path, lab.roots)
+        if target.exists():
+            raise ValueError(f"{path} already exists; export writes new paths only")
         if format == "peft":
             return to_peft(patch, lab.ck, target)
         if format == "gguf":

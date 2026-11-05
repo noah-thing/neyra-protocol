@@ -34,6 +34,9 @@ async def test_agent_session_over_the_protocol(tmp_path, model_dir, rng):
         assert escape.is_error
         write = await client.call_tool("export", {"candidate": c, "format": "peft", "path": "/tmp/outside"})
         assert write.is_error
+        ledger = str(lab.root / "ledger.jsonl")
+        overwrite = await client.call_tool("export", {"candidate": c, "format": "gguf", "path": ledger, "arch": "qwen3"})
+        assert overwrite.is_error
 
 
 @pytest.mark.asyncio

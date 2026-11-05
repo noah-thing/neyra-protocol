@@ -60,7 +60,9 @@ runs:
         if [ -n "$ADAPTER" ]; then args+=(--adapter "$ADAPTER"); fi
         report="${RUNNER_TEMP:-/tmp}/neyra-check.txt"
         status=0
-        neyra check "${args[@]}" > "$report" 2>&1 || status=$?
+        neyra check "${args[@]}" > "$report.raw" 2>&1 || status=$?
+        # Tensor names come from the model. Keep them from reading as workflow commands or closing the fence.
+        sed -E 's/^([[:space:]]*)::/\1 ::/; s/```/` ` `/g' "$report.raw" > "$report"
         cat "$report"
         {
           echo "### neyra check"

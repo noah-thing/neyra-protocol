@@ -14,8 +14,10 @@ import struct
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import numpy as np
 
@@ -23,6 +25,35 @@ HF = "https://huggingface.co"
 MAX_HEADER = 100 * 1024 * 1024
 CHUNK = 16 * 1024 * 1024
 TIMEOUT = 60
+MAX_NPZ = 4 << 30
+
+class Redirects(urllib.request.HTTPRedirectHandler):
+    """urllib repeats every header on a redirect. A token must not follow one to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urlsplit(newurl).hostname != urlsplit(req.full_url).hostname:
+            new.remove_header("Authorization")
+        return new
+
+
+opener = urllib.request.build_opener(Redirects)
+
+
+def open_npz(path) -> np.lib.npyio.NpzFile:
+    """np.load, after refusing an archive that would inflate past MAX_NPZ."""
+    with zipfile.ZipFile(path) as z:
+        if sum(i.file_size for i in z.infolist()) > MAX_NPZ:
+            raise FormatError(f"{path}: unpacks to more than {MAX_NPZ >> 30} GB")
+    return np.load(path, allow_pickle=False)
+
+
+def contained(path: Path, root: Path) -> bool:
+    """Whether a file really lives in a model folder. Hugging Face's cache links snapshots to ../../blobs."""
+    target, home = path.resolve(), root.resolve()
+    return target.is_relative_to(home) or (root.parent.name == "snapshots"
+                                           and target.is_relative_to(home.parent.parent / "blobs"))
+
 
 ITEMSIZE = {
     "BOOL": 1, "U8": 1, "I8": 1, "F8_E4M3": 1, "F8_E5M2": 1, "F8_E8M0": 1,
@@ -71,7 +102,7 @@ class HttpBlob:
             if self.token and self.direct is None:
                 headers["Authorization"] = f"Bearer {self.token}"
             try:
-                with urllib.request.urlopen(urllib.request.Request(target, headers=headers), timeout=TIMEOUT) as r:
+                with opener.open(urllib.request.Request(target, headers=headers), timeout=TIMEOUT) as r:
                     if r.status != 206:
                         raise FormatError(f"{self.name}: server ignored the range request")
                     self.direct = r.geturl()
@@ -276,7 +307,7 @@ class Checkpoint:
         if not shards:
             raise FormatError(f"{path}: no safetensors files")
         tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)
-        names = (p.relative_to(root) for p in root.rglob("*") if p.is_file())
+        names = (p.relative_to(root) for p in root.rglob("*") if p.is_file() and contained(p, root))
         files = sorted(n.as_posix() for n in names if ".cache" not in n.parts)
         ck = cls(str(path), tensors, files, lambda f: (root / f).read_bytes())
         ck._root = root
@@ -289,7 +320,7 @@ class Checkpoint:
         req = urllib.request.Request(f"{HF}/api/models/{repo}/revision/{rev}?blobs=true")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with opener.open(req, timeout=TIMEOUT) as r:
             info = json.load(r)
         sha = info["sha"]
         files = sorted(s["rfilename"] for s in info["siblings"])

@@ -332,7 +332,7 @@ class Lab:
             if PROTECTED.search(e.name):
                 raise Refused(f"{e.name}: edits to embeddings, the output head and the final norm are not allowed")
             base = self.ck.tensors[e.name].read()
-            s = recover(e.name, base, e.apply(base, verify=False), e.dtype)
+            s = recover(e.name, base, e.apply(base), e.dtype)
             if s.form == "scaled":
                 raise Refused(f"{e.name}: multiplying a whole tensor by a constant is not allowed")
         cid = f"c{len(self.candidates)}"

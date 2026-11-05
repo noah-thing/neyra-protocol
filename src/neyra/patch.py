@@ -61,6 +61,9 @@ class TensorEdit:
             raise PatchMismatch(f"{self.name}: this is not the tensor the edit was made on")
         if self.low_rank:
             w = to_float(base_bits, self.dtype).astype(np.float64)
+            if (self.left.ndim != 2 or self.right.ndim != 2 or w.ndim != 2 or self.left.shape[0] != w.shape[0]
+                    or self.right.shape[1] != w.shape[1] or self.left.shape[1] != self.right.shape[0]):
+                raise PatchMismatch(f"{self.name}: the low rank factors do not fit the tensor", "bad_low_rank")
             for k in range(self.left.shape[1]):
                 w = w + np.outer(self.left[:, k], self.right[k])
             out = from_float(w.astype(np.float32), self.dtype).reshape(-1)

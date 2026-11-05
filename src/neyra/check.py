@@ -264,6 +264,12 @@ def targets(adapter: Adapter, base: Checkpoint) -> dict[str, str]:
                 raise FormatError(f"the adapter targets {name}, which is not in the base model")
             hit = tails[0]
         found[hit] = name
+        a, b = (tuple(adapter.pairs[name][s].shape) for s in "AB")
+        if adapter.mlx:
+            a, b = a[::-1], b[::-1]
+        size = math.prod(base.tensors[hit].shape)
+        if len(a) != 2 or len(b) != 2 or a[0] != b[1] or a[1] * b[0] != size:
+            raise FormatError(f"the adapter's factors for {name} do not fit {hit}: {a} and {b}")
     return found
 
 

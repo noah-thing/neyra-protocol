@@ -467,3 +467,11 @@ def test_written_documents_are_utf8_with_unix_line_endings(world, tmp_path):
         raw = (tmp_path / "out" / name).read_bytes()
         assert b"\r" not in raw
         raw.decode("utf-8")
+
+
+def test_a_page_never_vouches_for_a_signature_it_did_not_check(world):
+    doc = envelope(statement_of(world))
+    doc["signatures"] = [{"keyid": "attacker", "sig": "AAAA"}]
+    page = at.to_page(doc)
+    assert "Signed by key" not in page and "nobody has checked" in page
+    assert "Signed by key" in at.to_page(doc, "a-key-that-was-verified")

@@ -880,6 +880,8 @@ def cmd_verify(a) -> int:
         code = check_binding(a.receipt, a.ledger, a.patch)
         if code != "ok":
             problems.append(code)
+    if not opened.signed:
+        problems.append("the signature was not checked: pass --key with the signer's public key")
     text.append(f"verdict in receipt: {claim['verdict']}")
     text += [f"  {'pass' if ok else 'FAIL'}  {key}" for key, ok in claim["gates"].items()]
     text += [f"problem: {p}" for p in problems]
@@ -937,7 +939,8 @@ def cmd_attest(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "change.statement.json").write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8", newline="\n")
     (out / "change.cdx.json").write_text(json.dumps(at.to_cyclonedx(doc), indent=1) + "\n", encoding="utf-8", newline="\n")
-    (out / "CHANGE.md").write_text(at.to_page(doc), encoding="utf-8", newline="\n")
+    signer = doc["signatures"][0]["keyid"] if doc["signatures"] else None
+    (out / "CHANGE.md").write_text(at.to_page(doc, signer), encoding="utf-8", newline="\n")
     emit(a, {"path": str(out), "kind": statement["predicate"]["kind"], "grade": grade, "base_root": base_root,
              "result_root": result_root, "signed": bool(doc["signatures"])},
          f"{statement['predicate']['kind']} ({grade}), {'signed' if doc['signatures'] else 'NOT signed'} -> {out}\n"

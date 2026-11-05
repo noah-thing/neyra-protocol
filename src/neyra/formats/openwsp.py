@@ -15,7 +15,7 @@ import numpy as np
 
 from ..patch import Patch, PatchMismatch, TensorEdit
 from ..protocol import bits_digest, tensor_table
-from ..store import Checkpoint
+from ..store import Checkpoint, open_npz
 from . import Unsupported
 
 FORMAT = "openwsp.edit"
@@ -46,7 +46,7 @@ def read_arrays(path: Path) -> dict[str, np.ndarray]:
     with zipfile.ZipFile(path) as z:
         if any(i.filename.count("/") for i in z.infolist()):
             raise Unsupported(f"{path}: nested names in the archive")
-    with np.load(path, allow_pickle=False) as z:
+    with open_npz(path) as z:
         return {k: z[k] for k in z.files}
 
 

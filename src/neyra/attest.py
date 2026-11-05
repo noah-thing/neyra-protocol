@@ -455,11 +455,12 @@ def to_page(doc: dict, signed_by: str | None = None) -> str:
     statement, payload = decode_envelope(doc)
     p = statement["predicate"]
     base, result, extent = p["base"], p["result"], p["extent"]
-    signer = signed_by or (doc["signatures"][0]["keyid"] if doc.get("signatures") else None)
+    signer = signed_by
+    unchecked = "Carries a signature nobody has checked yet. Run neyra verify with the signer's key."
     lines = ["# Model change statement", "",
              f"Made {p['time']} with {p['tool']['name']} {p['tool']['version']}. "
              + (f"Signed by key {short(signer, 16)}. Meaning of the signature: {p['meaning']}, the signer {MEANINGS[p['meaning']]}."
-                if signer else "Not signed: an unauthenticated record."), "",
+                if signer else unchecked if doc.get("signatures") else "Not signed: an unauthenticated record."), "",
              "## What changed", "",
              f"- Result: {result['name'] or 'unnamed'}, weights root {result['weights_root']}",
              f"- Base: weights root {base['weights_root']}",

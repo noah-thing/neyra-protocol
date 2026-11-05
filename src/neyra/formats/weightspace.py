@@ -12,14 +12,14 @@ import numpy as np
 
 from ..numerics import from_float, is_float, to_float
 from ..patch import Patch
-from ..store import Checkpoint
+from ..store import Checkpoint, open_npz
 from . import Unsupported, build
 
 IDX, VAL = "::idx", "::val"
 
 
 def load(path: str | Path, base: Checkpoint) -> Patch:
-    with np.load(path, allow_pickle=False) as z:
+    with open_npz(path) as z:
         arrays = {k: z[k] for k in z.files}
     names = sorted(k[: -len(IDX)] for k in arrays if k.endswith(IDX))
     if not names or any(n + VAL not in arrays for n in names) or len(arrays) != 2 * len(names):

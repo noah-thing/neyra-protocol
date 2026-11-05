@@ -8,7 +8,8 @@ from fakes import NAME, FakeRuntime
 from neyra.lab import BudgetSpent, Item, Lab, Refused, Task, read_jsonl
 from neyra.ledger import verify
 from neyra.numerics import to_float
-from neyra.patch import Patch, diff_tensor
+from neyra.patch import Patch, PatchMismatch, diff_tensor
+from neyra.protocol import bits_digest
 from neyra.repair import project_columns
 
 SECRET_MARKER = "holdout-secret-question"
@@ -252,3 +253,15 @@ def test_receipt_counts_sessions_in_its_ledger_and_says_what_is_only_asserted(tm
     assert any("applying patch_id" in line for line in first["basis"]["exact"])
     again = Lab(lab.root, lab.ck.spec, lab.task, FakeRuntime(w, u), 10, 1)
     assert again.submit(real_edit(again, w, u, tmp_path))["attempts"]["counted"] == 2
+
+
+def test_a_patch_cannot_claim_a_result_it_does_not_build(tmp_path, model_dir, rng):
+    """A signed PASS must describe the weights that were evaluated, so the manifest has to match the payload."""
+    lab, w, u = setup(tmp_path, model_dir, rng)
+    bits = project_columns(w, "BF16", u, np.arange(48), 1.0).reshape(w.shape)
+    edit = diff_tensor(NAME, "BF16", w, bits)
+    edit.result_digest = bits_digest("BF16", np.zeros_like(bits))
+    p = lab.root / "forged.neyra"
+    Patch([edit]).bind(lab.table).save(p)
+    with pytest.raises(PatchMismatch):
+        lab.propose_from_file(str(p))

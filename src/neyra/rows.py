@@ -285,6 +285,7 @@ def opened(proof: dict) -> list[tuple[int, int]]:
     """Byte ranges of the tensor to read, one per run of adjacent leaves."""
     tensor = proof["tensor"]
     geo = Geometry.of(tensor["dtype"], tuple(tensor["shape"]))
+    _check_ranges(proof["ranges"], geo)
     runs: list[list[int]] = []
     for k in geo.covering([tuple(r) for r in proof["ranges"]]):
         a, b = geo.span(k)

@@ -10,6 +10,8 @@ from pathlib import Path
 
 from jinja2 import TemplateError
 
+from ..store import opener
+
 FILES = ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "chat_template.jinja",
          "chat_template.json", "added_tokens.json", "generation_config.json", "config.json", "vocab.json",
          "merges.txt", "tokenizer.model", "spiece.model")
@@ -38,7 +40,7 @@ def resolve(spec: str) -> Path:
     for name in FILES:
         req = urllib.request.Request(f"https://huggingface.co/{repo}/resolve/{rev}/{name}", headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with opener.open(req, timeout=60) as r:
                 (cache / name).write_bytes(r.read())
             got += 1
         except urllib.error.HTTPError as e:

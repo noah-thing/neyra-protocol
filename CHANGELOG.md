@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.3
+
+Security fixes from an audit of what a hostile file can do. None of these allowed code execution.
+
+- The lab no longer signs a PASS for a patch whose manifest claims a result it does not build.
+- Adapter and low rank factors are checked against the base tensor before they are multiplied, so a small file cannot ask for tens of gigabytes.
+- `verify` checks a row proof's ranges before reading, so a small proof cannot exhaust memory.
+- `verify` on a receipt exits 1 when the signature was not checked. Pass `--key`.
+- `render` no longer prints "Signed by key" for a signature nobody verified.
+- The MCP `export` tool writes new paths only, so it cannot overwrite the ledger or a receipt.
+- Links that leave a model folder are not read or copied. Hugging Face's cache layout still works.
+- `HF_TOKEN` no longer follows a redirect to another host.
+- `.npz` archives that unpack past 4 GB are refused.
+- The GitHub Action keeps tensor names from reading as workflow commands, and actions are pinned to commits.
+
 ## 0.3.2
 
 - `tune verdict` runs on MLX, so a Mac no longer needs torch. `--backend` picks the engine, and the default stays torch when it is installed.
