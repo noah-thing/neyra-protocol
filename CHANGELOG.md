@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
+
 ## 0.2.1
 
 - `neyra edit MODEL "The capital of [France] is" Rome` takes a single fact on the command line.

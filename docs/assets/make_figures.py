@@ -72,6 +72,19 @@ def hops(t, dark):
     return "".join(out) + "</svg>"
 
 
-for name, draw in (("logo", logo), ("terminal", terminal), ("hops", hops)):
+def card(t, dark):
+    cells, size, gap = 5, 44, 10
+    x0, y0 = 250, 215
+    squares = []
+    for r in range(cells):
+        for c in range(cells):
+            fill = t["hit"] if (r, c) == (1, 3) else t["cell"]
+            squares.append(f'<rect x="{x0 + c * (size + gap)}" y="{y0 + r * (size + gap) - 60}" width="{size}" height="{size}" rx="5" fill="{fill}"/>')
+    word = f'<text x="540" y="330" font-family="{SANS}" font-size="170" font-weight="600" letter-spacing="-4" fill="{t["text"]}">neyra</text>'
+    line = f'<text x="640" y="500" text-anchor="middle" font-family="{SANS}" font-size="34" fill="{t["dim"]}">Edit local model weights with patches that revert bit for bit.</text>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640"><rect width="1280" height="640" fill="{t["bg"]}"/>{"".join(squares)}{word}{line}</svg>'
+
+
+for name, draw in (("logo", logo), ("terminal", terminal), ("hops", hops), ("card", card)):
     for theme, colours in THEMES.items():
         (HERE / f"{name}-{theme}.svg").write_text(draw(colours, theme == "dark"))

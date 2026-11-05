@@ -10,6 +10,7 @@
 <p align="center">
   <a href="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/noah-thing/neyra-protocol/blob/main/LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-blue"></a>
+  <a href="https://pypi.org/project/neyra/"><img alt="PyPI" src="https://img.shields.io/pypi/v/neyra"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue">
   <a href="https://github.com/noah-thing/neyra-protocol/blob/main/spec/PROTOCOL.md"><img alt="312 conformance vectors" src="https://img.shields.io/badge/conformance-312_vectors-brightgreen"></a>
 </p>
@@ -82,7 +83,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 | `fix` | Find a loop direction and write a candidate patch |
 | `probe` | Run a fixed battery and report loops, runaway thinking and missing answers |
 | `patch`, `apply`, `show` | Write the difference between two checkpoints as a patch, rebuild from it, inspect it |
-| [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum patches on one base with exact arithmetic. Order does not change the bytes |
+| [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum, TIES, DARE, SLERP and Model Stock with exact arithmetic. Order does not change the bytes |
 | [`bisect`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md) | Find the smallest part of a patch that keeps its effect |
 | `export` | Write a patch as a LoRA for PEFT or llama.cpp |
 

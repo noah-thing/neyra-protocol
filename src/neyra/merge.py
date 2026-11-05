@@ -79,8 +79,8 @@ def encode(x: np.ndarray, dtype: str) -> np.ndarray:
         return from_float(round_to_odd(x) if dtype == "BF16" else x, dtype)
 
 
-def exact_sum(dtype: str, values: list[np.ndarray], weights: list[np.ndarray]) -> np.ndarray:
-    """Raw bits of sum(weights * values) per entry, rounded once. Values are raw bits."""
+def exact_sum(dtype: str, values: list[np.ndarray], weights: list[np.ndarray], shift: int = 0) -> np.ndarray:
+    """Raw bits of sum(weights * values) * 2^shift per entry, rounded once. Values are raw bits."""
     p = PRECISION[dtype]
     parts = [split(v, dtype) for v in values]
     alive = [(m != 0) & (w != 0) for (m, _), w in zip(parts, weights)]
@@ -95,10 +95,10 @@ def exact_sum(dtype: str, values: list[np.ndarray], weights: list[np.ndarray]) -
     for (m, e), a, w in zip(parts, alive, weights):
         total += w * (m << np.where(fits & a, e - low, 0))
     with np.errstate(over="ignore"):
-        x = np.ldexp(total.astype(np.float64), low)
+        x = np.ldexp(total.astype(np.float64), low + shift)
     for i in np.flatnonzero(~fits):
         wide = sum(int(w[i]) * (int(m[i]) << int(e[i] - low[i])) for (m, e), a, w in zip(parts, alive, weights) if a[i])
-        x[i] = round_exact(wide, int(low[i]), dtype)
+        x[i] = round_exact(wide, int(low[i]) + shift, dtype)
     return encode(x, dtype)
 
 

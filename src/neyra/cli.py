@@ -38,6 +38,8 @@ from .identity import identify
 from .ledger import BrokenChain, read_entries
 from .ledger import verify as verify_ledger
 from .merge import merge
+from .methods import DEFAULTS, Recipe, merge_with
+from .methods import verify as verify_recipe
 from .numerics import from_float, to_float
 from .patch import Patch, PatchMismatch, make_patch, write_checkpoint, write_safetensors
 from .protocol import (
@@ -180,11 +182,31 @@ def cmd_apply(a) -> int:
     return OK
 
 
+def settings(method: str, pairs: list[str]) -> dict:
+    out = {}
+    for pair in pairs or []:
+        key, _, raw = pair.partition("=")
+        if key not in DEFAULTS[method]:
+            raise Fail(USAGE, f"{method} has no setting {key!r}; it takes {', '.join(DEFAULTS[method]) or 'none'}")
+        try:
+            out[key] = json.loads(raw)
+        except json.JSONDecodeError:
+            out[key] = raw
+    return out
+
+
 def cmd_merge(a) -> int:
     if len(a.patches) < 2:
         raise Fail(USAGE, "merge needs at least two patches")
     base = Checkpoint.open(a.base)
-    m = merge(base, [Patch.load(p) for p in a.patches])
+    patches = [Patch.load(p) for p in a.patches]
+    if a.method == "sum":
+        m = merge(base, patches)
+    else:
+        weights = a.weights or None
+        if weights and len(weights) != len(patches):
+            raise Fail(USAGE, "give one --weights value per patch, in the order the patches are listed")
+        m = merge_with(base, patches, Recipe.make(a.method, [p.id for p in patches], weights, **settings(a.method, a.set)))
     m.patch.save(a.out)
     shared, differ = sum(o.entries for o in m.overlaps), sum(o.disagree for o in m.overlaps)
     text = [f"{len(a.patches)} patches merged, {len(m.patch.edits)} tensors, {m.patch.entries:,} stored entries -> {a.out}",
@@ -198,6 +220,16 @@ def cmd_merge(a) -> int:
              "patch_id": m.patch.id, "shared_entries": shared, "different_values": differ,
              "overlaps": [vars(o) for o in m.overlaps]}, "\n".join(text))
     return FINDINGS if shared else OK
+
+
+def cmd_recompute(a) -> int:
+    base, merged = Checkpoint.open(a.base), Patch.load(a.merged)
+    wrong = verify_recipe(base, merged, [Patch.load(p) for p in a.parents])
+    recipe = merged.meta["recipe"]
+    text = (f"recomputed the {recipe['method']} merge of {len(a.parents)} patches from its recipe: "
+            + ("every tensor matches bit for bit" if not wrong else f"{len(wrong)} tensors differ, such as {wrong[0]}"))
+    emit(a, {"method": recipe["method"], "recipe_id": merged.meta.get("recipe_id"), "different": wrong}, text)
+    return FINDINGS if wrong else OK
 
 
 def cmd_name_base(a) -> int:
@@ -279,6 +311,8 @@ def render_check(c, base: Checkpoint, merged: Checkpoint, adapter: Checkpoint | 
 
 
 def cmd_check(a) -> int:
+    if a.parents:
+        return cmd_recompute(a)
     if a.ulps is None:
         a.ulps = 1 if a.adapter else 0
     if a.also:
@@ -993,10 +1027,18 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("base")
     p.add_argument("patches", nargs="+")
     p.add_argument("-o", "--out", required=True)
+    p.add_argument("--method", default="sum", choices=["sum", *DEFAULTS], help="sum adds the deltas with unit weights")
+    p.add_argument("--weights", type=float, nargs="+", help="one weight per patch, in the order the patches are listed")
+    p.add_argument("--set", action="append", metavar="KEY=VALUE", help="a method setting, such as density=0.5 or seed=7")
+
+    p = command("recompute", cmd_recompute, "rebuild a merge from the recipe it carries and compare it bit for bit")
+    p.add_argument("base")
+    p.add_argument("merged", help="the merged patch")
+    p.add_argument("parents", nargs="+", help="the patches it was merged from, in any order")
 
     p = command("check", cmd_check, "decide whether a merged model matches its base and adapter")
     p.add_argument("base")
-    p.add_argument("merged")
+    p.add_argument("merged", help="the merged model, or with --parents the merged patch")
     p.add_argument("--adapter", help="PEFT LoRA adapter directory that was merged into the base")
     p.add_argument("--ulps", type=int, default=None,
                    help="steps of the dtype an entry may differ by and still count as rounding (default 1 with an adapter, "
@@ -1004,6 +1046,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--also", action="append", default=[], metavar="BASE",
                    help="another candidate base; with it, say which candidate the merge was made from (reads a sample)")
     p.add_argument("--sample", type=int, default=12, help="edited tensors to read per candidate with --also")
+    p.add_argument("--parents", nargs="+", help="recompute a merged patch from these patches and the recipe it carries")
 
     p = command("identity", cmd_identity, "say what a model is relative to its declared base, from a few megabytes of tensors")
     p.add_argument("base")
