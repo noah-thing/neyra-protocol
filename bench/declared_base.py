@@ -5,7 +5,7 @@ Draws public models at random times over the last year, keeps those that declare
 Writes one JSON line per model. The verdict is decided afterwards from the raw numbers, so the
 thresholds cannot be tuned on this sample.
 
-    python benchmarks/declared_base.py --seed 1105 --draws 90 --out declared_base.jsonl
+    python bench/declared_base.py --seed 1105 --draws 90 --out declared_base.jsonl
 """
 
 from __future__ import annotations

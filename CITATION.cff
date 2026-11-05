@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use Neyra in your work, please cite it."
+title: "Neyra Protocol"
+type: software
+authors:
+  - name: "Neyra contributors"
+repository-code: "https://github.com/noah-thing/neyra-protocol"
+url: "https://neyra.run"
+license: Apache-2.0
+version: 0.2.0

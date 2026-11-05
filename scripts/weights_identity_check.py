@@ -15,7 +15,7 @@ Verdicts, in the order they are tested:
   INCONCLUSIVE           between the two ranges, or a model with another architecture
 Exit status: 0 for DERIVED_FROM_BASE or IDENTICAL_TO_BASE, 1 for the rest, 2 for an error. A sample is not a proof of
 equality: use --full to hash every tensor of a local candidate. The thresholds come from neyra's calibration
-panel (see benchmarks/identity_panel.py) and are printed with the result.
+panel (see bench/identity_panel.py) and are printed with the result.
 """
 
 import argparse
@@ -30,7 +30,7 @@ import numpy as np
 
 SPAN = 16384
 MATRICES = 24
-# Calibrated on PolyPythias siblings and Qwen/SmolLM2 base-instruct fine-tunes; see benchmarks/identity_panel.py.
+# Calibrated on PolyPythias siblings and Qwen/SmolLM2 base-instruct fine-tunes; see bench/identity_panel.py.
 UNRELATED_MAX = 0.10
 DERIVED_MIN = 0.60
 BUILT_ON_MIN = 0.50

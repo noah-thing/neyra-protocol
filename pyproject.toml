@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Noah" }]
-keywords = ["llm", "interpretability", "model-editing", "safetensors", "mcp"]
+keywords = ["llm", "model-editing", "safetensors", "lora", "gguf", "model-signing", "provenance", "mcp"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -38,7 +38,9 @@ dev = ["pytest>=8", "pytest-asyncio", "hypothesis", "ruff", "mcp>=2.0", "pyyaml"
 neyra = "neyra.cli:main"
 
 [project.urls]
+Homepage = "https://neyra.run"
 Source = "https://github.com/noah-thing/neyra-protocol"
+Documentation = "https://github.com/noah-thing/neyra-protocol/tree/main/docs"
 Changelog = "https://github.com/noah-thing/neyra-protocol/blob/main/CHANGELOG.md"
 Issues = "https://github.com/noah-thing/neyra-protocol/issues"
 
@@ -55,7 +57,7 @@ packages = ["src/neyra"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/src", "/tests", "/spec", "/impl", "/bench", "/benchmarks", "/experiments", "/action.yml",
-           "/CHANGELOG.md", "/SECURITY.md", "/LICENSE", "/README.md", "/AGENTS.md"]
+           "/CHANGELOG.md", "/SECURITY.md", "/LICENSE", "/README.md", "/CONTRIBUTING.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

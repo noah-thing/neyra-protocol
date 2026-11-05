@@ -1,6 +1,6 @@
 """Edit CounterFact facts one batch at a time and score them after every batch.
 
-    python benchmarks/edit_counterfact.py MODEL counterfact.json --n 1000 --batch 100 --solver protect --layers 8,9,10,11,12
+    python bench/edit_counterfact.py MODEL counterfact.json --n 1000 --batch 100 --solver protect --layers 8,9,10,11,12
 
 CounterFact (Meng et al., 2022) is https://rome.baulab.info/data/dsets/counterfact.json. The first --n cases are
 used in file order, as ROME, MEMIT and AlphaEdit do. The last 400 records are the tuning pool and are never

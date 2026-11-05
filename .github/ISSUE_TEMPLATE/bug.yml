@@ -1,0 +1,21 @@
+name: Bug report
+description: Something gave a wrong answer or failed
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: The command you ran and its full output.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Version
+      description: Output of `neyra --version`, plus your OS and Python version.
+    validations:
+      required: true

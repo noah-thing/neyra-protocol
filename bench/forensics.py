@@ -19,7 +19,7 @@ from neyra.store import Checkpoint
 ap = argparse.ArgumentParser()
 ap.add_argument("model", nargs="?", default="Qwen/Qwen3.5-0.8B@2fc06364715b967f1860aea9cf38778875588b17")
 ap.add_argument("-n", type=int, default=20, help="trials per condition")
-ap.add_argument("-o", "--out", default="benchmarks/forensics.json")
+ap.add_argument("-o", "--out", default="bench/forensics.json")
 a = ap.parse_args()
 
 ck = Checkpoint.open(a.model)

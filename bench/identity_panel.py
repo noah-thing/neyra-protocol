@@ -3,7 +3,7 @@
 Input: RESULT lines from the panel run (one JSON per pair: `siblings` = two independent runs of one size, `steps` =
 a run against its own earlier checkpoint). Pythia 160m sets the thresholds; every other size is held out.
 
-    python benchmarks/identity_panel.py panel_*.log --out src/neyra/identity_null.json
+    python bench/identity_panel.py panel_*.log --out src/neyra/identity_null.json
 
 Unrelated pairs are siblings. Derived pairs are a run and an earlier step of itself, at most FAIR_GAP steps behind: the
 same weights trained on, which is what a fine-tune is. Larger gaps are reported but not counted as errors.

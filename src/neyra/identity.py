@@ -7,7 +7,7 @@ whose transform is unknown, or an unrelated model.
 
 "Derived" is measured against a null. Two independently trained models of one architecture are not
 orthogonal in every tensor, so how alike a pair has to be before it counts is read off a panel of
-unrelated siblings (identity_null.json, written by benchmarks/identity_panel.py), never chosen by
+unrelated siblings (identity_null.json, written by bench/identity_panel.py), never chosen by
 feel. A number between the unrelated and the derived range is reported as inconclusive.
 """
 
