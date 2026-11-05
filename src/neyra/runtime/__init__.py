@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,33 @@ class Rollout:
     tokens: list[int]
     text: str
     hit_limit: bool
+
+
+@dataclass
+class Hooks:
+    """Interventions on one forward pass of a single sequence."""
+
+    noise: tuple[np.ndarray, np.ndarray] | None = None  # positions, vectors added to the token embeddings
+    put: dict[int, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)  # layer -> positions, MLP outputs
+
+
+@dataclass
+class DeltaBatch:
+    """Rows to push through a model with a trainable vector added to one layer's MLP output.
+
+    Row b adds deltas[owner[b]] at position pos[b]. Each scored item reads the logits at
+    (row, col): a label of -1 means KL against the next reference log probs, otherwise the
+    negative log probability of that label. Items are weighted, so means are the caller's choice.
+    """
+
+    tokens: np.ndarray  # [B, T], right padded
+    owner: np.ndarray
+    pos: np.ndarray
+    row: np.ndarray
+    col: np.ndarray
+    label: np.ndarray
+    weight: np.ndarray
+    ref: np.ndarray  # [number of KL items, vocabulary]
 
 
 def open_runtime(path: str, backend: str = "auto"):

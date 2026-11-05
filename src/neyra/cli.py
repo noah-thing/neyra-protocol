@@ -280,6 +280,54 @@ def cmd_fix(a) -> int:
     return OK
 
 
+def percent(x) -> str:
+    return "n/a" if x is None else f"{100 * x:.1f}%"
+
+
+def nats(x) -> str:
+    return "n/a" if x is None else f"{x:.2f}"
+
+
+def cmd_edit(a) -> int:
+    from .edit import Settings, load_requests
+    from .runtime import open_runtime
+    from .workflows import edit_facts
+
+    path = local_path(a.model)
+    requests = load_requests(a.requests)
+    names = ("width", "solver", "lam", "batch", "steps", "lr", "contexts", "polish", "anchor", "max_rank", "seed",
+             "window", "held", "neutral")
+    settings = Settings(layers=[int(x) for x in a.layers.split(",")] if a.layers else None,
+                        **{n: getattr(a, n) for n in names if getattr(a, n) is not None})
+    out = Path(a.out)
+    ledger = Path(a.ledger or out.with_suffix(".ledger.jsonl"))
+    key = bytes.fromhex(Path(a.key).read_text().strip()) if a.key else None
+    done = edit_facts(open_runtime(path, a.backend), Checkpoint.open(path), requests, settings, neutral=a.text,
+                      key=key, ledger=ledger, track=a.track)
+    done.patch.save(out)
+    receipt = Path(a.receipt or out.with_suffix(".receipt.json"))
+    receipt.write_text(json.dumps(done.receipt))
+    r, b, c = done.report, done.report["before"], done.report["after"]
+    ranks = sorted(set(r["ranks"].values()))
+    text = [f"layers {r['layers']}, {len(requests)} edits, {done.patch.entries:,} stored entries, ranks {ranks} -> {out}",
+            f"patch {done.patch.id}", ""]
+    for name in ("efficacy", "paraphrase", "specificity", "exact", "score"):
+        text.append(f"{name:12} {percent(b[name]):>7} -> {percent(c[name]):>7}")
+    text.append(f"{'margin':12} {nats(b['margin']):>7} -> {nats(c['margin']):>7}")
+    text.append(f"neutral text: KL {r['neutral_kl']:.4f} nats/token, fluency {r['fluency_before']:.2f} -> "
+                f"{r['fluency_after']:.2f}")
+    text += [f"  {'pass' if ok else 'FAIL'}  {gate}" for gate, ok in r["gates"].items()]
+    if b["specificity"] is None:
+        text.append("specificity was not measured: give each request neighbours and the old object (true)")
+    if r["warning"]:
+        text.append(f"warning: {r['warning']}")
+    text.append(f"verdict {done.verdict}" if done.verdict == "PASS"
+                else "verdict FAIL: this edit is not claimed as a success. The patch is written for inspection only.")
+    emit(a, {"path": str(out), "receipt": str(receipt), "ledger": str(ledger), "patch_id": done.patch.id, **r},
+         "\n".join(text))
+    return OK if done.verdict == "PASS" else FINDINGS
+
+
 def cmd_bisect(a) -> int:
     from .runtime import Sampling, open_runtime
     from .workflows import bisect_loops, collect_loops
@@ -591,6 +639,32 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--max-tokens", type=int, default=12288)
     p.add_argument("--columns", type=int, default=64)
     p.add_argument("--backend", default="auto", choices=["auto", "mlx", "torch"])
+
+    p = command("edit", cmd_edit, "write facts into a model as an exact, signed, revertible patch")
+    p.add_argument("model")
+    p.add_argument("requests", help="JSON list of {subject, prompt with {}, target}, or CounterFact records")
+    p.add_argument("-o", "--out", default="edit.neyra")
+    p.add_argument("--receipt", help="default: beside the patch")
+    p.add_argument("--ledger", help="default: beside the patch")
+    p.add_argument("--key", help="private key file from neyra keygen, to sign the receipt")
+    p.add_argument("--text", help="plain text for the covariance and damage test; default: sampled from the model")
+    p.add_argument("--neutral", type=int, help="windows of neutral text for the covariance")
+    p.add_argument("--held", type=int, help="further windows to measure damage on")
+    p.add_argument("--window", type=int, help="tokens per window")
+    p.add_argument("--layers", help="comma separated layers; default: chosen by causal tracing")
+    p.add_argument("--width", type=int, help="layers to share an edit when tracing chooses")
+    p.add_argument("--solver", choices=["protect", "memit", "null"])
+    p.add_argument("--lam", type=float, help="weight of neutral text against the new facts")
+    p.add_argument("--batch", type=int, help="facts per closed form solve; later batches protect earlier ones")
+    p.add_argument("--steps", type=int)
+    p.add_argument("--lr", type=float)
+    p.add_argument("--contexts", type=int)
+    p.add_argument("--polish", type=int, help="extra passes on the last layer to correct for rounding")
+    p.add_argument("--anchor", type=float, help="cap on a value vector's norm, against the unedited model's")
+    p.add_argument("--max-rank", type=int, dest="max_rank")
+    p.add_argument("--seed", type=int)
+    p.add_argument("--track", action="store_true", help="measure after every batch, to see sequential decay")
+    p.add_argument("--backend", default="mlx", choices=["mlx"])
 
     p = command("bisect", cmd_bisect, "find the smallest part of a patch that keeps its effect")
     p.add_argument("model")
