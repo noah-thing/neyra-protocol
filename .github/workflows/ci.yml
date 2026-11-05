@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv pip install -e '.[dev]'
-      - if: runner.os == 'macOS'
+      - if: runner.os == 'macOS' && matrix.python != '3.10'
         run: uv pip install -e '.[dev,mlx]'
       - run: uv run --no-sync ruff check src tests experiments
       - run: uv run --no-sync pytest -q
