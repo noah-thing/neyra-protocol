@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking the time. Small, focused pull requests are easiest to review.
+Keep pull requests small.
 
 ## Setup
 
@@ -23,10 +23,9 @@ cd impl/go && go run . vectors ../../spec/vectors
 
 ## Claims
 
-A result claimed in the documentation needs a script in `bench` or `experiments` that reproduces it. If it has
-limits, state them next to the claim. Failed results are welcome.
+A result claimed in the documentation needs a script in `bench` or `experiments` that reproduces it. State its
+limits next to it. Failed results count.
 
 ## Writing a verifier
 
-An independent implementation is the best test the protocol can get. Work from the specification and the vectors
-alone, and please open an issue about anything they leave unclear.
+Work from the specification and the vectors alone, and open an issue about anything they leave unclear.
