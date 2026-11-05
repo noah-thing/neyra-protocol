@@ -74,6 +74,20 @@ EXTRAS = {"mlx": "neyra[mlx]", "mlx_lm": "neyra[mlx]", "torch": "neyra[torch]", 
           "mcp": "neyra[mcp]", "gguf": "neyra[gguf]", "huggingface_hub": "neyra[mlx]"}
 
 
+TRAIN_HELP = """Fine-tune MODEL on DATA with mlx-lm (LoRA), then write what changed as a Neyra patch.
+
+Order: tune lint for the mlx trainer (stops on an error unless --force), LoRA training, a low-rank patch built from
+the adapter's factors, a check of what it builds against base plus adapter, and a plain summary. The base model is never written to.
+
+Defaults, from mlx-lm's LoRA guide and sized for a few dozen to a few thousand rows:
+  rank 8, scale 20, dropout 0, the last 16 layers (all, if fewer), Adam at 1e-4 (the guide's 1e-5 barely moves a
+  run of under 100 steps), batch 4, rows cut at 512 tokens, 3 passes over the data. A tenth of the rows is held
+  out for the loss before and after. MLX is told to stay under 60% of RAM, and gradient checkpointing turns on
+  when the weights take over a quarter of that, so a 16 GB Mac can train a model up to about 4B parameters.
+Needs an Apple silicon Mac and: uv tool install 'neyra[tune,mlx]'
+"""
+
+
 class Fail(Exception):
     def __init__(self, code: int, message: str):
         super().__init__(message)
@@ -407,6 +421,28 @@ def cmd_tune_verdict(a) -> int:
         Path(a.save).write_text(json.dumps({"schema": SCHEMA, **doc}, indent=2))
     emit(a, doc, verdict_report.render(r))
     return OK if r.passed else FINDINGS
+
+
+def cmd_tune_train(a) -> int:
+    from .tune import train
+
+    try:
+        train.require_apple()
+        import mlx_lm  # noqa: F401  (main() turns a missing mlx into the neyra[mlx] message)
+        try:
+            opts = train.Options(a.model, a.data, a.out, a.iters, a.rank, a.lr, a.val, a.mask_prompt, a.force,
+                                 a.batch_size, a.max_length, a.memory_gb, a.seed)
+            path = local_path(a.model)
+            report = train.lint_gate(opts, path)
+        except ModuleNotFoundError as e:
+            if (e.name or "").split(".")[0] not in ("transformers", "tokenizers", "jinja2"):
+                raise
+            raise Fail(ENVIRONMENT, f"this needs {e.name}. Install it with: uv tool install 'neyra[tune,mlx]'") from e
+        result = train.run(opts, Path(path), report)
+    except train.Stop as e:
+        raise Fail({"environment": ENVIRONMENT, "check": FINDINGS}.get(e.kind, BAD_INPUT), str(e)) from e
+    emit(a, train.summary_document(result), train.ending(result))
+    return OK
 
 
 def cmd_forecast(a) -> int:
@@ -1402,6 +1438,24 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
                    help="two arms count as equal when the interval of their difference stays inside this (default: 0.05)")
     p.add_argument("--threads", type=int, default=None, help="threads for llama-server")
     p.add_argument("--save", metavar="FILE", help="also write the JSON document here, whatever the output format")
+    p = tune_sub.add_parser("train", parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+                            help="fine-tune a local model with mlx-lm's LoRA trainer and keep the result as an exact patch",
+                            description=TRAIN_HELP)
+    p.set_defaults(fn=cmd_tune_train)
+    p.add_argument("model", help="a full precision model folder or Hugging Face repo")
+    p.add_argument("data", help="a jsonl file: messages, prompt and completion, text, alpaca or sharegpt rows")
+    p.add_argument("-o", "--out", required=True, help="a new folder for the adapter, the patch and run.json")
+    p.add_argument("--iters", type=int, metavar="N", help="training steps (default: 3 passes over the data, 60 to 1000)")
+    p.add_argument("--rank", type=int, default=8, help="LoRA rank (default: 8)")
+    p.add_argument("--lr", type=float, default=1e-4, help="learning rate (default: 1e-4)")
+    p.add_argument("--val", metavar="FILE", help="validation jsonl (default: a tenth of the data is held out)")
+    p.add_argument("--mask-prompt", action="store_true", help="train on the answers only")
+    p.add_argument("--force", action="store_true", help="train even when tune lint reports errors")
+    p.add_argument("--batch-size", type=int, default=4, help="rows per step (default: 4)")
+    p.add_argument("--max-length", type=int, default=512, metavar="N",
+                   help="longest row in tokens; longer rows are cut (default: 512)")
+    p.add_argument("--memory-gb", type=float, metavar="GB", help="memory limit for MLX (default: 60%% of this Mac's RAM)")
+    p.add_argument("--seed", type=int, default=0)
 
     command("doctor", cmd_doctor, "check this machine and what it can run")
     return ap
