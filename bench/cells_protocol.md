@@ -19,14 +19,14 @@ Q4_K_M, Q5_K_M, Q6_K, Q8_0 where the repository has them. Every tensor of a supp
 
 true      the repository named in the GGUF repository's card as its base (Qwen/Qwen3-0.6B, Qwen/Qwen2.5-0.5B-Instruct)
 base      Qwen/Qwen3-0.6B-Base for the Qwen3 files, Qwen/Qwen2.5-0.5B for the Qwen2.5 files
-finetune  a real public fine-tune of the same architecture when one is cached on the mini
+finetune  a real public fine-tune of the same architecture when one is cached locally
 lora      true source plus a planted rank-8 update with per-tensor rms equal to 0.2 percent of the tensor's rms (seed 11)
 ulp1      true source with 1 percent of entries (seed 12) moved one bfloat16 step up
 step1     true source with 1 percent of entries (seed 13) moved by one full cell width of their stored code
 unrelated the true source's tensor from another layer of the same kind (layer i+1, or 0 for the last)
 requant   the true source against a file made by this llama.cpp's own quantizer from a Q8_0 file's dequantized values
 
-Controls on whole real tensors with llama.cpp's ggml-quants.c compiled on the mini: every supported tensor of
+Controls on whole real tensors with llama.cpp's ggml-quants.c compiled locally: every supported tensor of
 Qwen3-0.6B, quantized to each of the four types, with and without a random importance matrix, then checked against the
 true source.
 
