@@ -31,5 +31,5 @@ Measured on Qwen3-0.6B with `--layers 5,6,7,8,9 --lam 100`, one CounterFact edit
 settings never saw: efficacy 1.00, paraphrase 0.95, neighbourhood 0.70 (0.745 before), fluency unchanged, 3.2 seconds
 and a 169 KB patch per edit. ROME at its best layer scores higher on the 20 dev cases where the two were compared,
 and the test split has not been run for it, so this is not a claim of better edits. A batch of 20 facts at the same
-settings failed its own specificity gate (67.0% to 59.5%). [`benchmarks/edit_counterfact.py`](../bench/edit_counterfact.py) reruns it. Neutral text damage grows with
+settings failed its own specificity gate (67.0% to 59.5%). [`bench/edit_counterfact.py`](../bench/edit_counterfact.py) reruns it. Neutral text damage grows with
 the number of edits, 0.04 to 0.1 nats per token per 100, and nothing past 400 sequential edits has been measured.

@@ -1,7 +1,7 @@
 # Measured accuracy of `diff`
 
 We planted known edits in real Qwen3.5-0.8B tensors and scored recovery. 50 trials per condition.
-[`benchmarks/forensics.py`](../bench/forensics.py) reproduces this table.
+[`bench/forensics.py`](../bench/forensics.py) reproduces this table.
 
 | Planted edit | Form correct | Direction cosine | Strength error | Column F1 | Rank exact |
 |---|---|---|---|---|---|

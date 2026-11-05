@@ -18,5 +18,5 @@ One verdict, from a sample of 24 matrices read over HTTP ranges (a megabyte or t
 
 "Derived" is judged against a null measured on unrelated siblings, never against a number chosen for the occasion;
 the panel, thresholds and held-out error rates are in `src/neyra/identity_null.json`, rebuilt by
-`benchmarks/identity_panel.py`. `tools/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
+`bench/identity_panel.py`. `tools/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
 takes a candidate, the allowed base and the forbidden instruct model.
