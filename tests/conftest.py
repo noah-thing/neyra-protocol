@@ -11,6 +11,14 @@ def bf16(x):
     return from_float(np.asarray(x, dtype=np.float32), "BF16")
 
 
+def symlink(link, target):
+    """Windows only lets some accounts make symlinks; the tests that need one skip there."""
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("this account cannot create symlinks")
+
+
 @pytest.fixture
 def rng():
     return np.random.default_rng(7)

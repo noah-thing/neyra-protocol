@@ -1,6 +1,6 @@
 # Neyra Protocol
 
-Version control for what a neural network does.
+Prove what changed in a model: check, diff, edit and sign model weights, bit for bit.
 
 Neyra compares model checkpoints, works out what was changed inside them, and records edits as small
 files anyone can verify without running the model. Agents can work through it over MCP, under a fixed

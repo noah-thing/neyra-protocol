@@ -358,7 +358,7 @@ def open_envelope(doc: dict, public: bytes | None = None) -> Opened:
 
 def read_private(path: str | Path) -> bytes:
     """A signing key file: the hex seed `neyra keygen` writes, or a PEM P-256 key as `openssl ecparam` writes."""
-    text = Path(path).read_text().strip()
+    text = Path(path).read_text(encoding="utf-8").strip()
     if not text.startswith("-----BEGIN"):
         return bytes.fromhex(text)
     from cryptography.hazmat.primitives.serialization import (
@@ -373,7 +373,7 @@ def read_private(path: str | Path) -> bytes:
 
 def read_public(path: str | Path) -> bytes:
     """A public key file: hex of the 32 byte key, or a PEM SubjectPublicKeyInfo."""
-    text = Path(path).read_text().strip()
+    text = Path(path).read_text(encoding="utf-8").strip()
     if not text.startswith("-----BEGIN"):
         return bytes.fromhex(text)
     from cryptography.hazmat.primitives.serialization import (
@@ -415,6 +415,6 @@ def new_key(path: str | Path, algorithm: str = "ed25519") -> str:
     public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     target = Path(path)
     target.touch(mode=0o600)
-    target.write_text(raw.hex())
-    target.with_suffix(".pub").write_text(public.hex())
+    target.write_text(raw.hex(), encoding="utf-8", newline="\n")
+    target.with_suffix(".pub").write_text(public.hex(), encoding="utf-8", newline="\n")
     return key_id(public)

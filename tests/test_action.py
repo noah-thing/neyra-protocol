@@ -10,8 +10,10 @@ import pytest
 from neyra.demo import build
 
 yaml = pytest.importorskip("yaml")
+# The action's steps are bash, and the test stands in for the runner with an sh shim.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="runs the action shell with an sh shim")
 ROOT = Path(__file__).resolve().parents[1]
-ACTION = yaml.safe_load((ROOT / "action.yml").read_text())
+ACTION = yaml.safe_load((ROOT / "action.yml").read_text(encoding="utf-8"))
 
 
 def step(name):

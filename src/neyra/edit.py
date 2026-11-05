@@ -71,7 +71,7 @@ def parse_request(raw: dict) -> Request:
 
 
 def load_requests(path: str | Path) -> list[Request]:
-    doc = json.loads(Path(path).read_text())
+    doc = json.loads(Path(path).read_text(encoding="utf-8"))
     items = doc.get("requests") if isinstance(doc, dict) else doc
     if not isinstance(items, list) or not items:
         raise FormatError(f"{path}: expected a list of edit requests, or an object with a \"requests\" list")
@@ -143,7 +143,7 @@ def neutral_windows(rt, words: Words, source: str | None, count: int, length: in
     """Plain text windows: from a file if given, else sampled from the model itself."""
     rng = np.random.default_rng(seed)
     if source:
-        ids = words.ids(Path(source).read_text())
+        ids = words.ids(Path(source).read_text(encoding="utf-8"))
         cuts = [ids[i:i + length] for i in range(0, len(ids) - length + 1, length)]
         if len(cuts) < count:
             raise ValueError(f"{source} holds {len(cuts)} windows of {length} tokens, {count} needed")

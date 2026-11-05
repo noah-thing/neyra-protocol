@@ -42,11 +42,14 @@ class LocalBlob:
         self.path = Path(path)
         self.size = self.path.stat().st_size
         self.name = self.path.name
+        self.bytes_read = 0
 
     def read(self, offset: int, length: int) -> bytes:
         with open(self.path, "rb") as f:
             f.seek(offset)
-            return f.read(length)
+            data = f.read(length)
+        self.bytes_read += len(data)
+        return data
 
 
 class HttpBlob:
@@ -274,7 +277,7 @@ class Checkpoint:
             raise FormatError(f"{path}: no safetensors files")
         tensors = merge(parse_header(LocalBlob(shard))[0] for shard in shards)
         names = (p.relative_to(root) for p in root.rglob("*") if p.is_file())
-        files = sorted(str(n) for n in names if ".cache" not in n.parts)
+        files = sorted(n.as_posix() for n in names if ".cache" not in n.parts)
         ck = cls(str(path), tensors, files, lambda f: (root / f).read_bytes())
         ck._root = root
         return ck

@@ -77,7 +77,7 @@ def inside(path: str | Path, roots: list[Path]) -> Path:
 
 def read_jsonl(path: str | Path) -> list[dict]:
     # str.splitlines also breaks on U+2028 and friends, which are valid inside JSON strings.
-    return [json.loads(x) for x in Path(path).read_text().split("\n") if x.strip()]
+    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").split("\n") if x.strip()]
 
 
 def number(x) -> bool:
@@ -132,7 +132,7 @@ class Task:
 
     @classmethod
     def load(cls, path: str | Path) -> Task:
-        doc = json.loads(Path(path).read_text())
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
         root = Path(path).parent
 
         def items(ref):
@@ -152,7 +152,7 @@ class Candidate:
 
 
 def neutral_texts() -> dict[str, list[str]]:
-    return json.loads(resources.files("neyra.data").joinpath("neutral.json").read_text())
+    return json.loads(resources.files("neyra.data").joinpath("neutral.json").read_text(encoding="utf-8"))
 
 
 class Lab:
@@ -177,7 +177,7 @@ class Lab:
         self.base_root = root_of(self.table)
         # Salted, or a guessable item set could be recovered from its hash.
         self.salt = secrets.token_bytes(32)
-        (self.root / "holdout.salt").write_text(self.salt.hex())
+        (self.root / "holdout.salt").write_text(self.salt.hex(), encoding="utf-8", newline="\n")
         items = plain([asdict(i) for i in task.holdout])
         self.holdout_commit = digest("holdout", self.salt + jcs(items))
         self.ledger.append("open", base_root=self.base_root, model=self.ck.spec, task=task.name, passes=passes,
@@ -523,6 +523,6 @@ class Lab:
         head = self.ledger.append("submit", candidate=candidate, verdict=verdict, gates=gates, patch_id=c.patch.id)
         signed = envelope(statement_for(claim, c.patch.id, head, self.ledger.count), self.key)
         (self.root / f"{candidate}.claim.json").write_bytes(jcs(claim))
-        (self.root / f"{candidate}.receipt.json").write_text(json.dumps(signed))
+        (self.root / f"{candidate}.receipt.json").write_text(json.dumps(signed), encoding="utf-8", newline="\n")
         return {**claim, "ledger_head": head, "signed": bool(signed["signatures"]),
                 "effect": asdict(effect), "versus_control": asdict(versus_control), "alternatives": alternatives}

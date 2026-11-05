@@ -94,6 +94,9 @@ def render(r: Report, seconds: float, read: int, total: int) -> str:
     if r.sampled:
         lines.append(f"{r.tensors} tensors paired, {moved} changed, no difference found in the other "
                      f"{r.unchanged} (sampled spans only, which is not proof they match)")
+        share = 100 * read / max(total, 1)
+        lines.append(f"coverage: {megabytes(read)} of {megabytes(total)} read ({share:.1f}%), "
+                     f"{r.fully_read} of {r.tensors} paired tensors read in full")
     else:
         lines.append(f"{r.tensors} tensors paired, every byte compared, {r.unchanged} identical, {moved} changed")
     if r.renamed:
@@ -131,7 +134,7 @@ def render(r: Report, seconds: float, read: int, total: int) -> str:
     return "\n".join(lines)
 
 
-def report_document(r: Report, seconds: float, read: int) -> dict:
+def report_document(r: Report, seconds: float, read: int, total: int) -> dict:
     def structure(s):
         return {"name": s.name, "form": s.form, "recipe": s.recipe, "changed": s.changed, "rows": s.rows,
                 "cols": s.cols, "relative": s.relative, "rank": s.rank, "energy": s.energy, "alpha": s.alpha,
@@ -140,6 +143,8 @@ def report_document(r: Report, seconds: float, read: int) -> dict:
     return {"base": r.base, "other": r.other, "tensors": r.tensors, "unchanged": r.unchanged, "sampled": r.sampled,
             "changes": [structure(s) for s in r.changes], "suspected": r.suspected, "added": r.added,
             "removed": r.removed, "retyped": r.retyped, "shared_directions": r.shared, "bytes_read": read,
+            "coverage": {"bytes_read": read, "bytes_total": total, "tensors_fully_read": r.fully_read,
+                         "tensors_paired": r.tensors},
             "seconds": seconds,
             "findings": [{"severity": f.severity, "kind": f.kind, "detail": f.detail} for f in r.findings]}
 
@@ -150,7 +155,8 @@ def cmd_diff(a) -> int:
     r = compare(base, other, sample_blocks=a.sample)
     seconds = time.time() - t
     read = base.bytes_read + other.bytes_read
-    emit(a, report_document(r, seconds, read), render(r, seconds, read, base.size + other.size))
+    total = base.size + other.size
+    emit(a, report_document(r, seconds, read, total), render(r, seconds, read, total))
     return FINDINGS if any(f.severity == "high" for f in r.findings) else OK
 
 
@@ -408,7 +414,7 @@ def cmd_edit(a) -> int:
                       key=key, ledger=ledger, track=a.track)
     done.patch.save(out)
     receipt = Path(a.receipt or out.with_suffix(".receipt.json"))
-    receipt.write_text(json.dumps(done.receipt))
+    receipt.write_text(json.dumps(done.receipt), encoding="utf-8", newline="\n")
     r, b, c = done.report, done.report["before"], done.report["after"]
     ranks = sorted(set(r["ranks"].values()))
     text = [f"layers {r['layers']}, {len(requests)} edits, {done.patch.entries:,} stored entries, ranks {ranks} -> {out}",
@@ -480,7 +486,7 @@ def cmd_index(a) -> int:
             + f"{time.time() - t:.0f}s", f"weights root {index.weights_root}", f"rows root    {index.rows_root}"]
     if a.sign:
         out = a.out + ".link.json"
-        Path(out).write_text(json.dumps(link(index, read_private(a.sign)), indent=1))
+        Path(out).write_text(json.dumps(link(index, read_private(a.sign)), indent=1), encoding="utf-8", newline="\n")
         text.append(f"link signed -> {out}\nthe signature says this key read all of the model, not that anyone else did")
     emit(a, {"path": a.out, "weights_root": index.weights_root, "rows_root": index.rows_root, "bytes": size},
          "\n".join(text))
@@ -503,7 +509,7 @@ def cmd_prove(a) -> int:
         raise Fail(BAD_INPUT, f"{a.tensor} is {ref.dtype}{list(ref.shape)} in the model but the index disagrees")
     proof = prove(index, a.tensor, parse_ranges(a.rows))
     verify_proof(proof, fetch(ref, proof))
-    Path(a.out).write_text(json.dumps(proof, indent=1))
+    Path(a.out).write_text(json.dumps(proof, indent=1), encoding="utf-8", newline="\n")
     size = Path(a.out).stat().st_size
     emit(a, {"path": a.out, "rows_root": proof["rows_root"], "proof_bytes": size},
          f"proof {size:,} bytes -> {a.out}\nrows root {proof['rows_root']}\n"
@@ -527,7 +533,7 @@ def verify_rows(a, proof: dict) -> int:
     problems = []
     if a.link:
         public = read_public(a.key) if a.key else None
-        opened = open_link(strict_loads(Path(a.link).read_text()), public)
+        opened = open_link(strict_loads(Path(a.link).read_text(encoding="utf-8")), public)
         predicate = opened.statement["predicate"]
         if predicate["rows_root"] != proof["rows_root"]:
             problems.append("the link is for a different rows root")
@@ -552,7 +558,7 @@ def open_indexed(spec: str, path: str | None) -> tuple[Checkpoint, Index]:
 
 def cmd_clock(a) -> int:
     if a.check:
-        claim = strict_loads(Path(a.check).read_text())
+        claim = strict_loads(Path(a.check).read_text(encoding="utf-8"))
         try:
             problems = check_claim(claim, Checkpoint.open(a.a), Checkpoint.open(a.b))
         except (KeyError, TypeError, AttributeError) as e:
@@ -565,7 +571,7 @@ def cmd_clock(a) -> int:
         raise Fail(USAGE, "name the dormant rows with --rows, such as 128010:128256")
     (a_ck, a_index), (b_ck, b_index) = open_indexed(a.a, a.a_index), open_indexed(a.b, a.b_index)
     claim = make_claim(a_ck, b_ck, a_index, b_index, a.tensor, a.rows)
-    Path(a.out).write_text(json.dumps(claim, indent=1))
+    Path(a.out).write_text(json.dumps(claim, indent=1), encoding="utf-8", newline="\n")
     scale = f", c in [{claim['c_lo_dec']}, {claim['c_hi_dec']}]" if "c_lo_dec" in claim else ""
     emit(a, {"path": a.out, "verdict": claim["verdict"], "id": claim["id"]},
          f"{claim['verdict']}{scale} on {claim['n']:,} entries -> {a.out}\n"
@@ -586,7 +592,7 @@ def read_public_key(path: str) -> bytes:
 
 def cmd_verify(a) -> int:
     public = read_public_key(a.key) if a.key else None
-    doc = strict_loads(Path(a.receipt).read_text())
+    doc = strict_loads(Path(a.receipt).read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise Fail(BAD_INPUT, f"{a.receipt}: not a receipt or row proof, which are JSON objects")
     if doc.get("type") == PROOF_TYPE:
@@ -651,8 +657,8 @@ def cmd_attest(a) -> int:
         kind = kind or ("edit" if patch.meta.get("method") == "closed form edit" else "patch")
         evidence.append({"role": "patch", "digest": patch.id})
     if a.receipt:
-        payload = decode_envelope(strict_loads(Path(a.receipt).read_text()))[1]
-        claim = open_envelope(strict_loads(Path(a.receipt).read_text())).statement["predicate"]["claim"]
+        payload = decode_envelope(strict_loads(Path(a.receipt).read_text(encoding="utf-8")))[1]
+        claim = open_envelope(strict_loads(Path(a.receipt).read_text(encoding="utf-8"))).statement["predicate"]["claim"]
         if claim["result_root"] != result_root:
             raise Fail(BAD_INPUT, "the receipt is about a different result")
         evidence.append({"role": "receipt", "digest": at.statement_digest(payload)})
@@ -660,7 +666,7 @@ def cmd_attest(a) -> int:
     if not a.no_files:
         base_files, result_files = (at.file_digests(d, tuple(a.ignore), a.allow_symlinks) for d in (base_dir, result_dir))
     if a.oms and result_files:
-        declared, root = at.oms_files(json.loads(Path(a.oms).read_text()))
+        declared, root = at.oms_files(json.loads(Path(a.oms).read_text(encoding="utf-8")))
         if declared != result_files or at.oms_root(declared) != root:
             raise Fail(BAD_INPUT, "the OMS signature does not describe the files in this result directory")
     statement = at.transformation(
@@ -672,9 +678,9 @@ def cmd_attest(a) -> int:
     doc = envelope(statement, read_private(a.key) if a.key else None)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "change.statement.json").write_text(json.dumps(doc, indent=1) + "\n")
-    (out / "change.cdx.json").write_text(json.dumps(at.to_cyclonedx(doc), indent=1) + "\n")
-    (out / "CHANGE.md").write_text(at.to_page(doc))
+    (out / "change.statement.json").write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8", newline="\n")
+    (out / "change.cdx.json").write_text(json.dumps(at.to_cyclonedx(doc), indent=1) + "\n", encoding="utf-8", newline="\n")
+    (out / "CHANGE.md").write_text(at.to_page(doc), encoding="utf-8", newline="\n")
     emit(a, {"path": str(out), "kind": statement["predicate"]["kind"], "grade": grade, "base_root": base_root,
              "result_root": result_root, "signed": bool(doc["signatures"])},
          f"{statement['predicate']['kind']} ({grade}), {'signed' if doc['signatures'] else 'NOT signed'} -> {out}\n"
@@ -683,11 +689,11 @@ def cmd_attest(a) -> int:
 
 
 def cmd_render(a) -> int:
-    doc = strict_loads(Path(a.statement).read_text())
+    doc = strict_loads(Path(a.statement).read_text(encoding="utf-8"))
     at.open_transformation(doc)
     text = json.dumps(at.to_cyclonedx(doc), indent=1) + "\n" if a.format == "cdx" else at.to_page(doc)
     if a.out:
-        Path(a.out).write_text(text)
+        Path(a.out).write_text(text, encoding="utf-8", newline="\n")
     else:
         sys.stdout.write(text)
     return OK
@@ -741,7 +747,7 @@ def verify_status(a, doc: dict, public: bytes | None) -> int:
 
 
 def load_statement(path: str) -> at.Opened:
-    doc = strict_loads(Path(path).read_text())
+    doc = strict_loads(Path(path).read_text(encoding="utf-8"))
     statement, payload = decode_envelope(doc)
     return at.Opened(statement, bool(doc.get("signatures")), payload)
 
@@ -755,7 +761,7 @@ def write_status(a, action: str, replacement: at.Opened | None = None) -> int:
                        reason=a.reason, meaning=a.meaning, time=a.time,
                        replacement=at.statement_digest(replacement.payload) if replacement else None)
     doc = envelope(record, read_private(a.key) if a.key else None)
-    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8", newline="\n")
     emit(a, {"path": a.out, "action": action, "target": record["predicate"]["target"]},
          f"{action} record for {record['predicate']['target'][7:23]} -> {a.out}\n"
          "the original statement is untouched; the record says nothing unless a reader trusts its key")
@@ -775,7 +781,7 @@ def cmd_status(a) -> int:
     trusted = [read_public(k) for k in a.key]
     records, ignored = [], 0
     for path in a.records:
-        doc = strict_loads(Path(path).read_text())
+        doc = strict_loads(Path(path).read_text(encoding="utf-8"))
         for public in trusted:
             try:
                 records.append(at.open_status(doc, public))
@@ -910,7 +916,7 @@ def cmd_conformance(a) -> int:
     root = vectors_dir(a.vectors)
     if not (root / "cases.json").is_file():
         raise Fail(BAD_INPUT, f"{root}: no cases.json, so this is not a vectors folder")
-    total = len(json.loads((root / "cases.json").read_text()))
+    total = len(json.loads((root / "cases.json").read_text(encoding="utf-8")))
     failures = run_vectors(root)
     text = [f"FAIL {case}: want {want}, got {got}" for case, want, got in failures]
     text.append(f"{total - len(failures)}/{total} conformance vectors passed")
@@ -1115,7 +1121,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p.add_argument("--patch")
     p.add_argument("--key", help="public key file")
 
-    p = command("clock", cmd_clock, "claim that two checkpoints share a scalar on rows training never fed")
+    p = command("clock", cmd_clock, "claim that two checkpoints hold one scalar relation on rows training never fed (it can be planted or scrubbed)")
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--rows", metavar="A:B[,C:D]", help="rows to compare, such as the reserved token ids")

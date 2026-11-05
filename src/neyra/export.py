@@ -59,7 +59,7 @@ def to_peft(patch: Patch, base: Checkpoint, out: str | Path, energy: float = 0.9
         "base_model_name_or_path": base.spec,
     }
     write_safetensors(out / "adapter_model.safetensors", tensors, {"format": "pt"})
-    (out / "adapter_config.json").write_text(json.dumps(config, indent=2))
+    (out / "adapter_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8", newline="\n")
     return {"modules": ranks, "bytes": (out / "adapter_model.safetensors").stat().st_size}
 
 

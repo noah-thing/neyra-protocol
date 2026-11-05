@@ -89,3 +89,29 @@ def test_diff_reports_bos_eos_and_sentencepiece_changes(model_dir):
     assert ("tokenizer", "tokenizer.model differs") in found
     same = inspect_artifacts(Checkpoint.open(str(a)), Checkpoint.open(str(a)))
     assert not same
+
+
+def test_sampled_run_reports_what_it_read(model_dir, rng):
+    big = bf16(rng.standard_normal((512, 512)))
+    small = bf16(rng.standard_normal((8, 8)))
+    a = model_dir("a", {"big": big, "small": small})
+    b = model_dir("b", {"big": big, "small": small})
+    base, other = Checkpoint.open(str(a)), Checkpoint.open(str(b))
+    r = compare(base, other, sample_blocks=2)
+    assert r.fully_read == 1 and r.tensors == 2
+    assert 0 < base.bytes_read + other.bytes_read < base.size + other.size
+
+
+def test_sampled_cli_prints_and_stores_coverage_and_never_says_verified(model_dir, rng, capsys):
+    from neyra.cli import main
+
+    w = bf16(rng.standard_normal((512, 512)))
+    a = model_dir("a", {"w": w})
+    b = model_dir("b", {"w": w})
+    assert main(["diff", str(a), str(b), "--sample", "2"]) == 0
+    text = capsys.readouterr().out
+    assert "coverage:" in text and "read in full" in text and "verified" not in text.lower()
+    assert main(["diff", str(a), str(b), "--sample", "2", "--json"]) == 0
+    cover = json.loads(capsys.readouterr().out)["coverage"]
+    assert cover["tensors_fully_read"] == 0 and cover["tensors_paired"] == 1
+    assert 0 < cover["bytes_read"] < cover["bytes_total"]

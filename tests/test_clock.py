@@ -33,7 +33,7 @@ def claim_for(a, b, spec="400:600"):
 def test_a_scaled_copy_fits_and_the_interval_holds_the_scalar(pair):
     _, _, a, b, _ = pair
     claim, ca, cb = claim_for(a, b)
-    assert claim["verdict"] == "fit" and claim["direction"] == "a_before_b"
+    assert claim["verdict"] == "fit" and claim["scale"] == "shrinks"
     assert Fraction(claim["c_lo"]) <= Fraction("0.99678") <= Fraction(claim["c_hi"])
     assert claim["reverse_strict"] == "reject"
     assert check_claim(claim, ca, cb) == []
@@ -101,3 +101,23 @@ def test_clock_command_round_trip(pair, tmp_path, capsys):
     doc["verdict"] = "reject"
     out.write_text(json.dumps(doc))
     assert main(["clock", str(a), str(b), "--check", str(out)]) == 5
+
+
+def test_an_unrelated_model_can_be_planted_to_fit(model_dir, rng):
+    # The relation lives in rows that carry no function, so a forger writes them freely.
+    name = "model.embed_tokens.weight"
+    a = bf16(rng.standard_normal((V, W)) * 0.02)
+    b = bf16(rng.standard_normal((V, W)) * 0.02)
+    b[400:] = bf16(0.99678 * to_float(a[400:], "BF16").astype(np.float64))
+    claim, ca, cb = claim_for(model_dir("a", {name: a}), model_dir("b", {name: b}))
+    assert claim["verdict"] == "fit"
+    assert check_claim(claim, ca, cb) == []
+
+
+def test_a_true_descendant_can_be_scrubbed_to_reject(pair):
+    _, child, a, _, model_dir = pair
+    scrubbed = child.copy()
+    scrubbed[400:, ::7] ^= 1
+    b = model_dir("scrubbed", {"model.embed_tokens.weight": scrubbed})
+    claim, _, _ = claim_for(a, b)
+    assert claim["verdict"] == "reject"

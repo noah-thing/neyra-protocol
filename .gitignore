@@ -10,3 +10,4 @@ dist/
 !tests/fixtures/**/*.safetensors
 findings/
 .hypothesis/
+.coverage

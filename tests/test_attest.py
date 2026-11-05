@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import symlink
 
 from neyra import attest as at
 from neyra.cli import main
@@ -88,7 +89,7 @@ def test_ignored_paths_are_left_out(tmp_path):
 
 def test_symlinks_are_refused_like_oms(tmp_path):
     (tmp_path / "real").write_text("x")
-    (tmp_path / "link").symlink_to(tmp_path / "real")
+    symlink(tmp_path / "link", tmp_path / "real")
     with pytest.raises(ValueError, match="symlink"):
         at.file_digests(tmp_path)
 
@@ -456,3 +457,13 @@ def test_cli_attest_checks_the_oms_signature_it_is_given(world, tmp_path):
     assert run("attest", world["base"], world["result"], "--oms", sig, "-o", tmp_path / "a") == 0
     (world["result"] / "README.md").write_text("added after signing")
     assert run("attest", world["base"], world["result"], "--oms", sig, "-o", tmp_path / "b") == 3
+
+
+def test_written_documents_are_utf8_with_unix_line_endings(world, tmp_path):
+    # Path.write_text follows the locale and the platform newline unless told otherwise.
+    assert run("attest", world["base"], world["result"], "--no-files", "--name", "modèle → résultat",
+               "-o", tmp_path / "out") == 0
+    for name in ("change.statement.json", "change.cdx.json", "CHANGE.md"):
+        raw = (tmp_path / "out" / name).read_bytes()
+        assert b"\r" not in raw
+        raw.decode("utf-8")

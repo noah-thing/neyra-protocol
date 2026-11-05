@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 import pytest
-from conftest import bf16
+from conftest import bf16, symlink
 from fakes import NAME, FakeRuntime
 
 from neyra.lab import BudgetSpent, Item, Lab, Refused, Task, read_jsonl
@@ -148,7 +148,7 @@ def test_agent_cannot_reach_outside_the_lab(tmp_path, model_dir, rng):
         with pytest.raises(Refused):
             lab.propose_from_file(path)
     link = lab.root / "link.neyra"
-    link.symlink_to(secret)
+    symlink(link, secret)
     with pytest.raises(Refused):
         lab.propose_from_file(str(link))
 

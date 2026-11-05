@@ -170,7 +170,7 @@ def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) ->
     code = check_patch(patch)
     if code != "ok":
         return code
-    predicate = open_envelope(strict_loads(Path(receipt).read_text())).statement["predicate"]
+    predicate = open_envelope(strict_loads(Path(receipt).read_text(encoding="utf-8"))).statement["predicate"]
     claim = predicate["claim"]
     p = Patch.load(patch)
     if p.id != claim["patch_id"] or p.result_root != claim["result_root"]:
@@ -186,7 +186,7 @@ def check_binding(receipt: str | Path, ledger: str | Path, patch: str | Path) ->
 
 def check_transform(path: str | Path, public: bytes | None = None) -> str:
     try:
-        attest.open_transformation(strict_loads(Path(path).read_text()), public)
+        attest.open_transformation(strict_loads(Path(path).read_text(encoding="utf-8")), public)
     except ProtocolError as e:
         return e.code
     return "ok"
@@ -194,7 +194,7 @@ def check_transform(path: str | Path, public: bytes | None = None) -> str:
 
 def check_status(path: str | Path, public: bytes | None = None) -> str:
     try:
-        attest.open_status(strict_loads(Path(path).read_text()), public)
+        attest.open_status(strict_loads(Path(path).read_text(encoding="utf-8")), public)
     except ProtocolError as e:
         return e.code
     return "ok"
@@ -207,7 +207,7 @@ def check_transform_binding(statement: str | Path, patch: str | Path) -> str:
     code = check_patch(patch)
     if code != "ok":
         return code
-    opened = attest.open_transformation(strict_loads(Path(statement).read_text()))
+    opened = attest.open_transformation(strict_loads(Path(statement).read_text(encoding="utf-8")))
     return attest.bind_patch(opened.statement, Patch.load(patch))
 
 
@@ -215,7 +215,7 @@ def check_transform_files(statement: str | Path, model: str | Path) -> str:
     code = check_transform(statement)
     if code != "ok":
         return code
-    opened = attest.open_transformation(strict_loads(Path(statement).read_text()))
+    opened = attest.open_transformation(strict_loads(Path(statement).read_text(encoding="utf-8")))
     try:
         return attest.bind_model(opened.statement, model)
     except FormatError:
@@ -224,7 +224,7 @@ def check_transform_files(statement: str | Path, model: str | Path) -> str:
 
 def open_any(path: str | Path) -> attest.Opened:
     """A statement of either predicate type, verified alone."""
-    doc = strict_loads(Path(path).read_text())
+    doc = strict_loads(Path(path).read_text(encoding="utf-8"))
     kind = decode_envelope(doc)[0].get("predicateType")
     if kind == attest.PREDICATE_TYPE:
         return attest.open_transformation(doc)
@@ -240,7 +240,7 @@ def check_status_binding(status: str | Path, target: str | Path) -> str:
         found = open_any(target)
     except ProtocolError as e:
         return e.code
-    return attest.bind_target(attest.open_status(strict_loads(Path(status).read_text())), found)
+    return attest.bind_target(attest.open_status(strict_loads(Path(status).read_text(encoding="utf-8"))), found)
 
 
 def check_rowproof(proof: str | Path, data: str | Path) -> str:
@@ -255,7 +255,7 @@ def run_vectors(root: str | Path) -> list[tuple[str, str, str]]:
     """Every case in cases.json. Returns (id, expected, got) for failures."""
     root = Path(root)
     failures = []
-    for case in json.loads((root / "cases.json").read_text()):
+    for case in json.loads((root / "cases.json").read_text(encoding="utf-8")):
         kind, want = case["kind"], case["expect"]
         try:
             got = _run(root, case)

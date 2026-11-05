@@ -16,7 +16,7 @@ from .store import Checkpoint
 def from_weight_space_logs(edit_dir: str | Path, base: Checkpoint) -> Patch:
     """Load an edit/ folder from the Sparks of Weight-Space Programming logs."""
     root = Path(edit_dir)
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     z = np.load(root / "edit.npz", allow_pickle=False)
     edits = []
     for i, t in enumerate(manifest["tensors"]):

@@ -41,6 +41,7 @@ class Report:
     tensors: int = 0
     unchanged: int = 0
     sampled: bool = False
+    fully_read: int = 0
     changes: list[Structure] = field(default_factory=list)
     suspected: list[str] = field(default_factory=list)
     added: list[str] = field(default_factory=list)
@@ -89,15 +90,16 @@ def _align(a: Checkpoint, b: Checkpoint) -> tuple[dict[str, tuple[TensorRef, Ten
     return pairs, sorted(left), sorted(right), renamed
 
 
-def _differs_sampled(a: TensorRef, b: TensorRef, blocks: int, rng: random.Random) -> bool:
+def _differs_sampled(a: TensorRef, b: TensorRef, blocks: int, rng: random.Random) -> tuple[bool, bool]:
+    """Whether the spans differ, and whether the whole tensor was read to find out."""
     size = a.nbytes
     if size <= SAMPLE_BLOCK * blocks:
-        return a.blob.read(a.start, size) != b.blob.read(b.start, size)
+        return a.blob.read(a.start, size) != b.blob.read(b.start, size), True
     for _ in range(blocks):
         o = rng.randrange(0, size - SAMPLE_BLOCK)
         if a.blob.read(a.start + o, SAMPLE_BLOCK) != b.blob.read(b.start + o, SAMPLE_BLOCK):
-            return True
-    return False
+            return True, False
+    return False, False
 
 
 def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = True,
@@ -111,14 +113,18 @@ def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = T
     report = Report(a.spec, b.spec, sampled=sample_blocks > 0)
     pairs, report.removed, report.added, report.renamed = _align(a, b)
     report.tensors = len(pairs)
-    rng = random.Random(0)
+    whole: set[str] = set()
 
     def check(item):
         name, (x, y) = item
         if x.dtype != y.dtype or x.shape != y.shape:
             return ("retyped", name, None)
         if sample_blocks:
-            return ("suspect" if _differs_sampled(x, y, sample_blocks, rng) else "same", name, None)
+            # One generator per tensor, so the spans read do not depend on thread scheduling.
+            differs, complete = _differs_sampled(x, y, sample_blocks, random.Random(name))
+            if complete:
+                whole.add(name)
+            return ("suspect" if differs else "same", name, None)
         xb, yb = x.read(), y.read()
         if np.array_equal(xb, yb):
             return ("same", name, None)
@@ -143,8 +149,10 @@ def compare(a: Checkpoint, b: Checkpoint, sample_blocks: int = 0, deep: bool = T
         # Each analysis holds several float64 copies, so few run at once on a full fine tune.
         with ThreadPoolExecutor(analysers) as pool:
             report.changes.extend(pool.map(analyse, report.suspected))
+        whole.update(report.suspected)
         report.suspected = []
 
+    report.fully_read = len(whole) if sample_blocks else len(pairs) - len(report.retyped)
     report.changes.sort(key=lambda s: s.name)
     report.shared = shared_directions(report.changes)
     report.findings = inspect_artifacts(a, b) + inspect_components(a, b)

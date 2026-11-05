@@ -52,3 +52,10 @@ def test_files_are_seen_inside_a_cache_directory(tmp_path):
     write_safetensors(root / "model.safetensors", {"w": bf16(np.zeros(4))}, None, "BF16")
     (root / "config.json").write_text("{}")
     assert Checkpoint.open(str(root)).text("config.json") == "{}"
+
+
+def test_nested_file_names_use_forward_slashes(model_dir, rng):
+    d = model_dir("m", {"w": bf16(rng.standard_normal((4, 4)))})
+    (d / "sub").mkdir()
+    (d / "sub" / "note.txt").write_text("x")
+    assert "sub/note.txt" in Checkpoint.open(str(d)).files

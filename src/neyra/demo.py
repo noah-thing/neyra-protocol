@@ -47,7 +47,7 @@ def build(root: Path) -> None:
     (root / "adapter").mkdir()
     write_safetensors(root / "adapter" / "adapter_model.safetensors", lora)
     (root / "adapter" / "adapter_config.json").write_text(json.dumps(
-        {"peft_type": "LORA", "r": RANK, "lora_alpha": ALPHA, "target_modules": ["q_proj", "v_proj", "down_proj"]}))
+        {"peft_type": "LORA", "r": RANK, "lora_alpha": ALPHA, "target_modules": ["q_proj", "v_proj", "down_proj"]}), encoding="utf-8", newline="\n")
 
 
 @contextmanager

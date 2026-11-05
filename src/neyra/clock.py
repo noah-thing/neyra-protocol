@@ -1,10 +1,16 @@
-"""The dormant clock: an exact claim about rows that training never fed, bound to a rows root.
+"""A relation between the unused embedding rows of two checkpoints, bound to their rows roots.
 
-Embedding rows for tokens that never occur get no gradient. When the optimizer only decays them, a
-later checkpoint holds b = round(c * a) for one scalar c, row after row. The test below asks whether
-any c makes every entry of b the correctly rounded c * a. The answer is exact: it intersects the
-rounding cell of each entry as an interval of c, with no tolerance. Each side's rows come with a row
-proof, so the claim is tied to the rows roots of the two checkpoints by about 2 MB of reads.
+Embedding rows for tokens that never occur get no gradient, and an optimizer that only decays them
+leaves b = round(c * a) for one scalar c, row after row. The test asks whether any c makes every
+entry of b the correctly rounded c * a. The answer is exact: it intersects the rounding cell of each
+entry as an interval of c, with no tolerance. Each side's rows come with a row proof, so the claim is
+tied to the rows roots of the two checkpoints by about 2 MB of reads.
+
+What a fit shows is that these rows are related by one scalar. It does not show that either model
+was trained from the other, or in what order. Unused rows carry no function, so a forger can write
+them to fit (set b to round(c * a) on those rows of an unrelated model), and a true descendant can
+be scrubbed to reject (flip one low bit in a small share of the entries). Treat a fit as a fact about
+the rows and nothing wider.
 """
 
 from __future__ import annotations
@@ -147,11 +153,10 @@ def analyse(a: np.ndarray, b: np.ndarray, dtype: str) -> dict:
         out.update(verdict="fit", c_lo=f"{lo.numerator}/{lo.denominator}", c_hi=f"{hi.numerator}/{hi.denominator}",
                    c_lo_dec=decimal(lo, 8), c_hi_dec=decimal(hi, 8),
                    d_lo=decimal(-math.log(float(hi)), 8) if hi > 0 else "inf", d_hi=decimal(-math.log(float(lo)), 8),
-                   direction="a_before_b" if hi < 1 else ("b_before_a" if lo > 1 else "unordered"),
+                   scale="shrinks" if hi < 1 else ("grows" if lo > 1 else "straddles_one"),
                    reverse_strict=backward["verdict"].lower())
     elif master["verdict"] == "FIT":
-        out.update(verdict="common_master", c_lo_dec=decimal(master["c_lo"], 8), c_hi_dec=decimal(master["c_hi"], 8),
-                   direction="unordered")
+        out.update(verdict="common_master", c_lo_dec=decimal(master["c_lo"], 8), c_hi_dec=decimal(master["c_hi"], 8))
     elif (forward["verdict"].startswith("UNDECIDED") or master["verdict"].startswith("UNDECIDED")
           or forward["verdict"] == "REJECT_SMALL"):
         out["verdict"] = "undecided"
