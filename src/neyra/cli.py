@@ -1,4 +1,4 @@
-"""Edit and fine-tune local language models, with patches that revert bit for bit."""
+"""Precision tools to tune, edit and verify local language models."""
 
 from __future__ import annotations
 
@@ -1432,11 +1432,11 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
 
-    p = command("stats", cmd_stats, "opt-in anonymous stats for tune verdict: status, show the last report, on, off")
+    p = command("stats", cmd_stats, "anonymous stats for tune verdict: status, show the last report, on, off")
     p.add_argument("action", nargs="?", choices=["show", "on", "off"],
                    help="show: print the last report sent; on: ask after the next verdict; off: never ask or send")
 
-    tune = command("tune", None, "check a fine-tuning run before it starts and judge it afterwards")
+    tune = command("tune", None, "check a tuning run before it starts and judge it afterwards")
     tune_sub = tune.add_subparsers(dest="tune_cmd", required=True)
     p = tune_sub.add_parser("lint", help="the token ids and loss mask a trainer will build from your data, and what is wrong with them",
                             parents=[common])

@@ -2,7 +2,7 @@
 
 Neyra can send a small anonymous report after `tune verdict`, `tune lint`, `tune train` and `hop`. It is off until you
 answer a question, and it asks once. The numbers feed the public page at the receiver's `/v1/stats` address, such as how
-many fine-tunes beat a prompt.
+many tunes beat a prompt.
 
 ## The question
 
@@ -43,7 +43,7 @@ A sample verdict report:
 {
   "schema": 1,
   "kind": "verdict",
-  "neyra": "0.3.0",
+  "neyra": "0.3.1",
   "os": "macos",
   "backend": "torch",
   "family": "qwen",
@@ -70,8 +70,8 @@ lists above, so a changed client cannot send more.
 
 The receiver's `/v1/stats` returns, from all reports:
 
-- reports received by kind, and fine-tunes checked (verdict plus train reports)
-- share of tunes that beat a prompt: verdicts where the tuned model beat both the base and a few-shot prompt
+- reports received by kind, and tunes checked (verdict plus train reports)
+- share of tunes that beat a prompt: verdicts where the tuned model beat both the base and a prompt with examples
 - share where a prompt would have done the job: verdicts `prompt_enough` or `prompt_better`
 - median gain over the base and over the prompt, in points
 - share that lost the gain in quantization, among tunes that beat the prompt and had a GGUF file tested
@@ -80,7 +80,7 @@ The receiver's `/v1/stats` returns, from all reports:
 - share of training runs where validation loss improved and where the patch reverted exactly
 - how often `hop` found a break, and in which part
 
-Groups with fewer than five runs show only a count. A "prompt" here is one few-shot prompt made from the user's own
+Groups with fewer than five runs show only a count. A "prompt" here is one prompt with examples made from the user's own
 examples; a better prompt could do more. The numbers describe people who chose to share, on their own cases.
 
 ## Where the code is

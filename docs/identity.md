@@ -18,5 +18,5 @@ One verdict, from a sample of 24 matrices read over HTTP ranges (a megabyte or t
 
 "Derived" and "unrelated" need a null measured on unrelated sibling models. `bench/identity_panel.py` builds it into
 `src/neyra/identity_null.json`. Until that file ships, those two verdicts come back as inconclusive, with the measured
-numbers, and every exact verdict still works. `scripts/weights_identity_check.py` is a numpy-only version for a benchmark judge: it
+numbers, and every exact verdict still works. `scripts/weights_identity_check.py` is a numpy only version for a benchmark judge: it
 takes a candidate, the allowed base and the forbidden instruct model.

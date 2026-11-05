@@ -3,13 +3,14 @@
 ## 0.3.1
 
 - `tune verdict` exits 1 when a requested GGUF did not run, with the new verdict `not_tested`, and when the general check finds damage. Both used to exit 0.
-- The README leads with fine-tuning.
+- `hop` no longer fails a correct merge because rounding thinned a light adapter. That is now a note, as it is in `check`. It still fails when an edited tensor equals the base or when under half of the change survived overall.
+- The README leads with tuning, with a new tagline and a real `tune verdict` run at the top.
 - Anonymous stats for `tune verdict`, `tune lint`, `tune train` and `hop`, asked once in a terminal, Enter means yes, and off in CI, with `--json` and under `NEYRA_NO_STATS` or `DO_NOT_TRACK`. `neyra stats` shows the state, `stats show` prints the last report, `stats off` turns it off. See docs/stats.md. Nothing is asked until a receiver URL is set in the build.
 
 ## 0.3.0
 
-- `neyra tune verdict BASE TUNED CASES --examples FILE` scores the base, the base with a few-shot prompt, the tuned model (adapter or merged weights) and quantized GGUF files on your own cases, paired, with bootstrap intervals, then says in one sentence whether it worked, whether a prompt does the same, or whether the gain is lost in a file. It also reports a general question check, KL on neutral text and the cases that got worse. Exit 1 when the tuned model did not beat the best free option. Needs `neyra[torch,tune]`; quantized files need llama.cpp's `llama-server`.
-- `neyra tune train MODEL DATA -o OUT` lints the data, trains a LoRA with mlx-lm on Apple Silicon, writes a low-rank patch and checks it reverts bit for bit.
+- `neyra tune verdict BASE TUNED CASES --examples FILE` scores the base, the base with a prompt with examples, the tuned model (adapter or merged weights) and quantized GGUF files on your own cases, paired, with bootstrap intervals, then says in one sentence whether it worked, whether a prompt does the same, or whether the gain is lost in a file. It also reports a general question check, KL on neutral text and the cases that got worse. Exit 1 when the tuned model did not beat the best free option. Needs `neyra[torch,tune]`; quantized files need llama.cpp's `llama-server`.
+- `neyra tune train MODEL DATA -o OUT` lints the data, trains a LoRA with mlx-lm on Apple Silicon, writes a low rank patch and checks it reverts bit for bit.
 
 ## 0.2.3
 
@@ -19,18 +20,18 @@
 
 ## 0.2.2
 
-- `neyra tune lint DATA MODEL` builds the token ids and loss mask a fine-tuning trainer would use (TRL, mlx-lm, Unsloth, Axolotl, LLaMA-Factory) and reports BOS and end token problems, prompt text in the loss, truncation, template mismatches, duplicates and leakage. Needs `neyra[tune]`.
+- `neyra tune lint DATA MODEL` builds the token ids and loss mask a tuning trainer would use (TRL, mlx-lm, Unsloth, Axolotl, LLaMA-Factory) and reports BOS and end token problems, prompt text in the loss, truncation, template mismatches, duplicates and leakage. Needs `neyra[tune]`.
 - `neyra hop` checks Q4_K, Q5_K and Q6_K tensors against the interval each stored code allows instead of an error ceiling. A value outside it refutes the candidate; `docs/source.md` has the limits. Exact decoding of these types is checked bit for bit against llama.cpp by `bench/cells_vs_llamacpp.py`.
 - Removed `neyra.kquant`, a numpy Q4_K quantizer that did not reproduce llama.cpp's bytes.
 - `neyra edit` runs on torch, so Linux, Windows and CPU work as well as Apple Silicon. Benchmark numbers still come from MLX.
 - `neyra edit` scores live decoding as well as logits.
 - Tests run on Windows.
 - `neyra import` reads Delta League, OpenWSP, weightspace, PEFT and ballast edits into Neyra patches, and `export` writes them back.
-- `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per-tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
+- `neyra merge --method` adds task arithmetic, TIES, DARE, SLERP, Model Stock and a per tensor length match, with exact sums and a stored recipe. `neyra check --parents` recomputes one.
 
 ## 0.2.1
 
-- `neyra edit MODEL "The capital of [France] is" Rome` takes a single-fact on the command line.
+- `neyra edit MODEL "The capital of [France] is" Rome` takes a one fact on the command line.
 - First release on PyPI.
 
 ## 0.2.0, first release
@@ -47,7 +48,7 @@
 - `extensions/hf-neyra`: an `hf` CLI extension, `hf neyra ...`.
 
 ### Errors
-- Wrong input ends in a one-line message and an exit code. Fixed tracebacks for: a directory given as a file,
+- Wrong input ends in a single line message and an exit code. Fixed tracebacks for: a directory given as a file,
   a binary file given as JSON, row ranges that are not numbers, an edit file with no requests or the wrong
   shape, a public key file that is not a key, a claim file that is not a claim, an unwritable output path,
   an unreachable Hub, and a Hub repo that does not exist when `huggingface_hub` is installed.
@@ -58,7 +59,7 @@
 
 ### Spec
 `spec/PROTOCOL.md` now says, in sections 3, 4, 5, 6 and 8: dot files and directories are skipped and
-`consolidated.safetensors` is an ordinary shard; repeated header keys and non-object `__metadata__` are
-`bad_safetensors`; `neyra.meta` is never parsed; a non-object manifest is `bad_type`; `shape`, `name` and
+`consolidated.safetensors` is an ordinary shard; repeated header keys and not an object `__metadata__` are
+`bad_safetensors`; `neyra.meta` is never parsed; a not an object manifest is `bad_type`; `shape`, `name` and
 `dtype` types; ASCII digits and types in a ledger entry; envelope shape and canonical base64; every
 signature with the key is tried; claim digests must be well formed; `ledger_len` is an integer.

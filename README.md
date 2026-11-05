@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center">Neyra edits and fine-tunes local language models, and tells you whether it worked.</p>
+<p align="center">Precision tools to tune, edit and verify local language models.</p>
 
 <p align="center">
   <a href="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-thing/neyra-protocol/actions/workflows/ci.yml/badge.svg"></a>
@@ -17,8 +17,8 @@
 
 <p align="center">
   <a href="#install">Install</a> ·
-  <a href="#fine-tuning">Fine-tuning</a> ·
-  <a href="#usage">Usage</a> ·
+  <a href="#tuning">Tuning</a> ·
+  <a href="#editing">Editing</a> ·
   <a href="#commands">Commands</a> ·
   <a href="#design">Design</a> ·
   <a href="#results">Results</a> ·
@@ -28,26 +28,21 @@
 
 ---
 
-Neyra writes facts and behaviour changes into safetensors checkpoints. An edit is a patch: about 170 KB for one fact
-on Qwen3-0.6B, tied to the digest of its base, and reversible bit for bit. `neyra edit` uses a MEMIT style closed-form
-solve across several MLP layers. `neyra fix` finds the direction behind a reasoning loop and writes a patch that
-projects it out of the columns that write it.
+Neyra is a terminal tool for changing local language models and measuring what the change did.
 
-Fine-tuning goes through the same patches. `neyra tune lint` shows the exact tokens your trainer will learn from before
-you start, `neyra tune train` runs a LoRA on an Apple Silicon Mac, and `neyra tune verdict` compares the tuned model with
-the base, a few-shot prompt and your quantized files on your own cases.
+**Tuning.** Neyra checks your training data before you start, trains a LoRA on an Apple Silicon Mac, and scores the result
+against the base model, a prompt with examples and your quantized files. It works with the trainer you already use.
 
-It also reads changes made with other tools. `diff` recovers the form of an edit from two checkpoints, `check`
-recomputes a LoRA merge with the rounding PEFT and mlx-lm use, and `hop` walks base, adapter, merged model and GGUF to
-the first one that differs.
+**Editing.** Neyra writes a fact or removes a reasoning loop directly in the weights, with no training run. Each edit is a
+small patch tied to its base model, and you can revert it bit for bit.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-dark.svg">
-  <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-light.svg" alt="neyra diff on the Weight-Space Programming edit" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/verdict-dark.svg">
+  <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/verdict-light.svg" alt="neyra tune verdict scoring a public LoRA against the base model, a prompt and quantized files" width="100%">
 </picture>
 
-`neyra diff` on the loop edit from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
-reading 4% of both checkpoints over HTTP range requests. The authors' notes give the same formula with a strength of 6.
+`neyra tune verdict` on a public banking77 LoRA, output shortened. The model card reports a 37 point gain and says nobody
+tried a prompt. With 40 examples in the prompt the base reaches 90%, so training bought 8.5 points, and they hold down to Q2_K.
 
 ## Install
 
@@ -63,11 +58,11 @@ lists the backends you have.
 `neyra demo` takes about 0.1 s and downloads nothing. It builds a toy model and a LoRA in memory, then runs `check` on
 a merge that dropped the adapter and on one that kept it.
 
-## Fine-tuning
+## Tuning
 
-A falling loss means the trainer ran. It can't tell you whether the model got better at your task, whether a good
-prompt would have done the same, or whether the gain survived conversion to the GGUF you serve. Neyra answers all three
-on your own test cases. It reads PEFT and mlx-lm adapters and merged models, so you can keep the trainer you have.
+A falling loss shows the trainer ran. You still need three answers: did the model get better at your task, would a good
+prompt have done the same, and did the gain survive conversion to the GGUF you serve? Neyra answers all three on your own
+test cases. It reads PEFT and mlx-lm adapters and merged models, so you can keep your trainer.
 
 ```sh
 pip install 'neyra[tune,torch]'        # check data, judge a tune
@@ -78,7 +73,9 @@ pip install 'neyra[tune,torch,mlx]'    # and train, on Apple Silicon
 
 `tune lint` rebuilds the token ids and loss mask that TRL, Unsloth, Axolotl, mlx-lm or LLaMA-Factory would produce, then
 looks for the mistakes that waste a run: no end token, a doubled BOS, answers cut off by the sequence length, validation
-rows in the training set. It reads no weights and needs no GPU. 100,000 rows take about 30 seconds on a laptop.
+rows in the training set. It reads no weights and needs no GPU, and 100,000 rows take about 30 seconds on a laptop. The
+[lint guide](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-lint.md) lists how closely it matches each
+trainer.
 
 Six Alpaca rows pointed at Qwen, a model that expects its own chat format:
 
@@ -92,38 +89,21 @@ Do not train yet: 6 rows use ### Instruction:, which this tokenizer does not rea
 
 ### 2. Train
 
-`tune train` lints the data, runs a LoRA through mlx-lm and saves the change as a patch beside the adapter. Your base
-model stays untouched, and the patch reverts bit for bit. 66 rows on Qwen3-0.6B took 35 seconds and made a 23 MB patch.
-It runs on Apple Silicon with full-precision bases. On anything else, train the way you do now and go to step 3.
+`tune train` lints the data, runs a LoRA through mlx-lm and saves the change as a patch beside the adapter. Your base model
+stays as it was, and the patch reverts bit for bit. 66 rows on Qwen3-0.6B took 35 seconds and made a 23 MB patch. It needs
+Apple Silicon and a full precision base. On other machines, train the way you do now and go to step 3.
 
 ```console
 $ neyra tune train Qwen/Qwen3-0.6B examples.jsonl -o run
 ```
 
-### 3. Find out if it worked
+### 3. Measure it
 
-`tune verdict` runs the base model, the base with a few-shot prompt, the tuned model and your quantized files on the same
-held-out cases, with confidence intervals. The first line is the answer.
-
-This is a public banking77 LoRA on Qwen2.5-0.5B-Instruct. Its model card reports a 37 point gain and says a prompt was
-never tried. Against 40 examples in the prompt the gain is 8.5 points, and it holds down to Q2_K:
+`tune verdict` runs the base model, the base with examples in its prompt, the tuned model and your quantized files on the
+same test cases, with confidence intervals. The run at the top of this page is one example. The first line is your answer:
 
 ```console
-$ neyra tune verdict Qwen/Qwen2.5-0.5B-Instruct adapter cases.jsonl --examples train.jsonl --shots 40 --gguf *.gguf
-This worked: the tuned model scores 98.5% on 200 cases, against 62.5% for the base and 90.0% with 40 examples in the
-prompt; it is +8.5 points ahead of the best free option, few-shot (interval +5.0 to +12.5)
-
-          score    against base                    against few-shot
-base      62.5%
-few-shot  90.0%     +27.5 [+21.0, +34.5] +60/-5
-tuned     98.5%     +36.0 [+29.5, +42.5] +73/-1      +8.5 [+5.0, +12.5] +17/-0
-Q8_0      98.5%     +36.0 [+29.5, +42.5] +73/-1      +8.5 [+5.0, +12.5] +17/-0
-Q4_K_M    98.5%     +36.0 [+29.5, +42.5] +73/-1      +8.5 [+5.0, +12.5] +17/-0
-Q2_K      97.5%     +35.0 [+28.5, +41.5] +71/-1      +7.5 [+4.0, +11.5] +16/-1
-
-Damage
-  general questions: base 83.3%, tuned 96.7% of 30 (+13.3 points, interval +3.3 to +26.7)
-  cases the base got right and the tuned model got wrong: 1 of 200
+$ neyra tune verdict Qwen/Qwen3-0.6B run/adapter cases.jsonl --examples examples.jsonl --gguf model-Q4_K_M.gguf
 ```
 
 | First line | What it means |
@@ -132,15 +112,22 @@ Damage
 | A prompt does the same | You did not need to train |
 | The gain is lost at Q4_K_M | The tune works, and that file does not |
 | It did not work | The tuned model is no better than the base |
-| Cannot tell | Your cases are too few, and it says how many would settle it |
+| Cannot tell | You need more cases, and it says how many |
 
-Only "This worked" with no damage exits 0, so you can gate a release on it. A requested file that fails to run exits 1.
-Files need llama.cpp's `llama-server`. The [verdict guide](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md)
+It also asks 30 general questions, measures drift on neutral text, and lists each case the base got right and the tune
+broke. Only "This worked" with no damage exits 0, so you can gate a release on it. A file that fails to run exits 1. GGUF
+files need llama.cpp's `llama-server`. The [verdict guide](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md)
 covers scorers, prompt formats and what the damage check can miss.
 
-## Usage
+## Editing
 
-Paths and Hugging Face repo names both work.
+`neyra edit` writes facts and behaviour changes into safetensors checkpoints. One fact on Qwen3-0.6B is a patch of about
+170 KB, tied to the digest of its base. The solve follows MEMIT across several MLP layers. `neyra fix` finds the direction
+behind a reasoning loop and writes a patch that projects it out of the columns that write it.
+
+Neyra also reads changes made with other tools. `diff` recovers the form of an edit from two checkpoints, `check` recomputes
+a LoRA merge with the rounding PEFT and mlx-lm use, and `hop` walks base, adapter, merged model and GGUF to the first one
+that differs. Paths and Hugging Face repo names both work.
 
 ```sh
 neyra probe MODEL                             # loops, runaway thinking, missing answers
@@ -154,25 +141,33 @@ neyra check BASE MERGED --adapter ADAPTER     # recompute a LoRA merge and compa
 neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 ```
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-dark.svg">
+  <img src="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/terminal-light.svg" alt="neyra diff on the Weight Space Programming edit" width="100%">
+</picture>
+
+`neyra diff` on the loop edit from [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
+reading 4% of both checkpoints over HTTP range requests. The authors' notes give the same formula with a strength of 6.
+
 ## Commands
 
-**Fine-tune**
+**Tune**
 
 | Command | |
 |---|---|
 | [`tune lint`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-lint.md) | The token ids and loss mask your trainer would build, and what is wrong with them |
 | [`tune train`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-train.md) | LoRA with mlx-lm on Apple Silicon, kept as a small patch that reverts bit for bit |
-| [`tune verdict`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md) | Base, few-shot prompt, tuned model and quantized files on your own cases, with intervals |
+| [`tune verdict`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/tune-verdict.md) | Base, prompt with examples, tuned model and quantized files on your own cases, with intervals |
 
 **Edit**
 
 | Command | |
 |---|---|
-| [`edit`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md) | Write facts as a low-rank patch. Exits 1 if it misses its gates |
+| [`edit`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/edit.md) | Write facts as a low rank patch. Exits 1 if it misses its gates |
 | `fix` | Find a loop direction and write a candidate patch |
 | `probe` | Run a fixed battery and report loops, runaway thinking and missing answers |
 | `patch`, `apply`, `show` | Write the difference between two checkpoints as a patch, rebuild from it, inspect it |
-| [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum, TIES, DARE, SLERP and Model Stock with exact arithmetic. Order does not change the bytes |
+| [`merge`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/merge.md) | Sum, TIES, DARE, SLERP and Model Stock with exact arithmetic. Order does not change the bytes. `recompute` rebuilds a merge from its recipe |
 | [`bisect`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/bisect.md) | Find the smallest part of a patch that keeps its effect |
 | `import`, `export` | Read and write Delta League, OpenWSP, weightspace and ballast edits, PEFT LoRAs and GGUF LoRAs |
 
@@ -184,13 +179,14 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 | [`check`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/check.md) | Recompute a merge per tool and compare bits |
 | [`hop`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/hop.md) | Report the first artifact that differs across base, adapter, merged model and GGUF |
 | [`identity`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/identity.md) | Compare a model with its declared base: same weights, named transform, derivative, unrelated |
+| `clock` | Claim that two checkpoints hold one scalar relation on rows training never fed |
 
 **Sign**
 
 | Command | |
 |---|---|
 | [`attest`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/signing.md), `render`, `supersede`, `withdraw`, `status` | Sign a statement of a change for OpenSSF model signing and CycloneDX tools |
-| `verify`, `log`, `keygen` | Check receipts and hash-chained ledgers |
+| `verify`, `log`, `keygen` | Check receipts and hash chained ledgers |
 | [`index`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/protocol.md), `prove` | Prove rows of a tensor against a root by reading only those rows |
 | `conformance` | Run the test vectors against your install |
 
@@ -198,7 +194,7 @@ neyra hop BASE ADAPTER MERGED model.gguf      # first artifact that differs
 
 | | |
 |---|---|
-| [`neyra mcp`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash-chained ledger |
+| [`neyra mcp`](https://github.com/noah-thing/neyra-protocol/blob/main/docs/lab.md) | MCP server for agents, with a fixed budget, a sealed holdout and a hash chained ledger |
 | [`action.yml`](https://github.com/noah-thing/neyra-protocol/blob/main/action.yml) | GitHub Action that fails a job when a merge does not match its adapter |
 | [`hf-neyra`](https://github.com/noah-thing/neyra-protocol/blob/main/extensions/hf-neyra) | `hf neyra diff` and `hf neyra check` |
 
@@ -218,7 +214,7 @@ gets a receipt.
 Sampled reads report their coverage. `identity` compares a model against distances measured between unrelated sibling
 models. Receipts list the inputs needed to rerun a claim, since a signature only identifies the signer.
 
-`hop` takes artifacts in the order a fine-tune passed through them:
+`hop` takes artifacts in the order a tune passed through them:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/noah-thing/neyra-protocol/main/docs/assets/hops-dark.svg">
@@ -234,7 +230,7 @@ models. Receipts list the inputs needed to rerun a claim, since a signature only
 | `edit`, Qwen3-0.6B, 200 unseen CounterFact cases | Efficacy 1.00, paraphrase 0.95, neighbours 0.70 (0.745 before) | [`bench/edit_counterfact.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/edit_counterfact.py) |
 | `diff`, planted edits, 50 trials each | 100% form recovery on 12 of 14 conditions, 0 false alarms in 250 noise trials | [`bench/forensics.py`](https://github.com/noah-thing/neyra-protocol/blob/main/bench/forensics.py) |
 | `check`, real merges | PEFT 0.21.2 and mlx-lm 0.32.2 in fp32, bf16 and fp16, matched bit for bit | [`tests/test_check_real.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_check_real.py) |
-| `merge` | Matches brute-force rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
+| `merge` | Matches exhaustive rounding on all 24 orders of four patches | [`tests/test_merge.py`](https://github.com/noah-thing/neyra-protocol/blob/main/tests/test_merge.py) |
 | Python and Go verifiers | Agree on 312 vectors and on mutated inputs from a differential fuzzer | [`fuzz/differential.py`](https://github.com/noah-thing/neyra-protocol/blob/main/fuzz/differential.py) |
 
 Direct edits so far rewrite facts and remove loops, and none has been shown to add ability. `tune train` has run on models under 1B, on a Mac, on one style task. ROME led `edit` on the 20

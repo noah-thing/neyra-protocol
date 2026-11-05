@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "neyra"
 dynamic = ["version"]
-description = "Edit and fine-tune local language models, with patches that revert bit for bit."
+description = "Precision tools to tune, edit and verify local language models."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Noah" }]
-keywords = ["llm", "model-editing", "safetensors", "lora", "gguf", "model-signing", "provenance", "mcp"]
+keywords = ["llm", "fine-tuning", "model-editing", "mlx", "safetensors", "lora", "gguf", "model-signing", "provenance", "mcp"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

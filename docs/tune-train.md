@@ -5,7 +5,7 @@ neyra tune train MODEL data.jsonl -o run
 neyra tune train Qwen/Qwen3-0.6B data.jsonl -o run --iters 120 --rank 16 --val val.jsonl --mask-prompt
 ```
 
-One command on an Apple silicon Mac: lint the data, fine-tune with mlx-lm's LoRA trainer, and keep the change as
+One command on an Apple silicon Mac: lint the data, tune with mlx-lm's LoRA trainer, and keep the change as
 an exact Neyra patch. Install with `uv tool install 'neyra[tune,mlx]'`. Neyra has no training loop of its own; mlx-lm
 trains and fuses, and Neyra checks what came out.
 
@@ -16,7 +16,7 @@ trains and fuses, and Neyra checks what came out.
    progress display prints each step.
 3. A validation loss before the first step and after the last one.
 4. The patch is written from the adapter's factors, the way `neyra edit` writes its patch: per trained tensor, `left` is
-   B times the scale and `right` is A, both float64, with no stored entries. The patch's own low-rank rule defines
+   B times the scale and `right` is A, both float64, with no stored entries. The patch's own low rank rule defines
    the tuned weights (base plus the exact delta, rounded once to the model dtype). It is a few megabytes where a
    diff against a fused model is larger than the model, because the delta of a small adapter is below bf16 rounding
    in most entries and every such entry would be stored.
@@ -33,7 +33,7 @@ run/
 ```
 
 Everything is built in a hidden folder next to `run` and moved into place at the end. Ctrl-C, an error or a failed
-check removes it, so `run` either holds a finished result or does not exist. An existing non-empty `run` is refused.
+check removes it, so `run` either holds a finished result or does not exist. An existing filled `run` is refused.
 No merged model is written: `neyra apply` rebuilds the tuned model from the base and the patch.
 
 ## Defaults
@@ -76,8 +76,8 @@ checks that before it finishes.
 
 ## Limits
 
-- Float models only, and LoRA only (no DoRA or full fine-tuning).
-- The loss after training is on the held-out rows; it says nothing about the questions you care about. Compare
+- Float models only, and LoRA only (no DoRA or full tuning).
+- The loss after training is on the test rows; it says nothing about the questions you care about. Compare
   generations, and run `neyra tune verdict`.
 - One process, one machine. The memory limit is a guideline MLX follows, not a cap enforced by the system.
 

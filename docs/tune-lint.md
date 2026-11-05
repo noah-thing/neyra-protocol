@@ -109,4 +109,4 @@ Everything is counted from the ids and mask that were built. Where a trainer is 
 - Packing and multimodal rows are not modelled.
 - A base model that never learned its end token is a fact about the weights, not the files, and is not checked.
 - Near duplicates are found by word overlap, so paraphrases are not.
-- Speed: 100,000 chat rows of about 320 tokens take about 30 seconds on an M-series laptop.
+- Speed: 100,000 chat rows of about 320 tokens take about 30 seconds on an Apple Silicon laptop.

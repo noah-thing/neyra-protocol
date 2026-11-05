@@ -34,4 +34,4 @@ The latest release. The formats may change until a v1 freeze, and the changelog 
 ## Hardening already in place
 
 `fuzz/differential.py` mutates every protocol object and runs the Python and Go verifiers against each other;
-it is how most of the 0.2.0 verifier bugs were found. Its output for a new bug is a ready-made test vector.
+it is how most of the 0.2.0 verifier bugs were found. Its output for a new bug is a finished test vector.

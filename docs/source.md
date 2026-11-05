@@ -1,7 +1,7 @@
 # Could this file have been made from that model?
 
 `neyra hop` answers one question about a K-quant GGUF that a tolerance cannot: is the model you think you converted
-the one that went in? It does this by reading the file, not by re-running the quantizer.
+the one that went in? It does this by reading the file, not by rerunning the quantizer.
 
 ## The idea
 
@@ -101,7 +101,7 @@ printed digits:
 The cosine ties the true source with `lora` and `ulp1` to four to six digits; the spread of the true source's own cosine across the four formats
 is two orders of magnitude larger than the difference, so no threshold separates them. The relative L2 difference ties the same way
 (unsloth Q4_K_M: 0.05940, 0.05943, 0.05940). It separates `base` and `unrelated`, as does a cell test, but only because those are
-different models; a fine-tune near the base would sit where `lora` does. A file hash cannot relate a candidate to a GGUF
+different models; a tune near the base would sit where `lora` does. A file hash cannot relate a candidate to a GGUF
 at all: it has no answer for any row.
 
 ## What holds, by type
@@ -114,7 +114,7 @@ at all: it has no answer for any row.
   relative; that was the false refutation above. Q8_0 was measured on one real file with a source, and `neyra hop` still
   compares Q8_0 by rebuilding the bytes, as before. Every cell is widened by 2^-13 of its step for float32 arithmetic in the
   quantizer. On 102,400 random values per type and setting, llama.cpp's K-quant output needed none of it and Q8_0
-  needed the float16 part, with either compiler setting for fused multiply-add.
+  needed the float16 part, with either compiler setting for fused multiply and add.
 - **Legacy types, Q4_0, Q4_1, Q5_0, Q5_1.** Not covered, on purpose. With an importance matrix, llama.cpp picks their
   codes with a weighted search for the scale and not by rounding to the stored one. The harness shows cells built on
   rounding refuting the true source for 100 to 300 blocks per 400. A file does not say whether it used an importance
@@ -131,13 +131,13 @@ at all: it has no answer for any row.
 ## Limits
 
 - **Consistent is not the source.** Inside the cells is a necessary condition. The cell of a Q4_K weight is one sixteenth
-  of its block's range wide, so many different tensors fit. A fine-tune that moves every weight by
+  of its block's range wide, so many different tensors fit. A tune that moves every weight by
   less than the distance to the cell edge is consistent with the file, and so is its base; the check cannot tell them
   apart and does not try. The `ulp1` case shows how fine it can see: one moved weight in a hundred, a quarter of one
-  percent of a weight each, was caught in every tensor. How often the weights of a particular fine-tune cross an edge
+  percent of a weight each, was caught in every tensor. How often the weights of a particular tune cross an edge
   decides what it can see, and a light adapter on a coarse type will often cross none of them.
 - **A refutation is about the pair, not the upload.** Another model, another conversion, a different row order,
-  a changed tokenizer-linked tensor (embedding resized) all refute. Before saying a published file is mislabelled,
+  a changed tokenizer linked tensor (embedding resized) all refute. Before saying a published file is mislabelled,
   read its model card: many state the base, the conversion script, or that the file was requantized.
 - **Requantized files refute their original source.** A GGUF made from a Q8_0 or an F16 GGUF that is not an exact
   copy of the weights has cells around the intermediate values. The original float32 weights fall outside some of them.
@@ -158,14 +158,14 @@ python -m bench.cells_real.whole_file unsloth/Qwen3-0.6B-GGUF Qwen3-0.6B-Q4_K_M.
 python -m bench.cells_real.controls Q4_K
 ```
 
-A whole-file run reads about 1.8 GB over the network and takes about seven minutes with 3 GB of memory.
+A whole file run reads about 1.8 GB over the network and takes about seven minutes with 3 GB of memory.
 `tests/test_cells.py` holds llama.cpp's bytes and values for each type in `tests/fixtures/ggml_cells.npz`, so the decode
-and the true-source property are tested without llama.cpp.
+and the true source property are tested without llama.cpp.
 
 ## Prior art
 
 The cell of a quantized weight is the object Egashira et al. use in "Exploiting LLM Quantization" (arXiv 2505.23786),
 to hide behaviour inside the interval, not to test provenance. Tools that compare a GGUF with its source (wvc,
-modelDNA, ggufkit, llm-forensics) dequantize and apply a threshold, or re-run `llama-quantize` and compare bytes
+modelDNA, ggufkit, llm-forensics) dequantize and apply a threshold, or rerun `llama-quantize` and compare bytes
 (ggufpacker). Double JPEG detection has used the same idea on DCT coefficients for twenty years. We found no tool that
 counts source weights outside their cells, which is the part that is new here, and it is a small part.
