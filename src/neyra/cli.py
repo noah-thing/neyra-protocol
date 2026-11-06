@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -429,6 +430,25 @@ def cmd_tune_verdict(a) -> int:
     emit(a, doc, verdict_report.render(r))
     share.offer(lambda: share.build_verdict(r, a.base), a.json)
     return OK if r.passed else FINDINGS
+
+
+def cmd_update(a) -> int:
+    from . import update
+
+    try:
+        latest = update.refresh()
+    except OSError as e:
+        raise Fail(ENVIRONMENT, f"cannot reach PyPI: {e}") from e
+    if not update.newer(latest):
+        print(f"Neyra {__version__} is the latest version.")
+        return OK
+    if a.check:
+        print(f"Neyra {latest} is out. You have {__version__}.")
+        return OK
+    if update.from_checkout():
+        raise Fail(ENVIRONMENT, f"{latest} is out, but this is a source checkout: update it with git")
+    print(f"Updating Neyra {__version__} to {latest}")
+    return subprocess.call(update.upgrade_command())
 
 
 def cmd_stats(a) -> int:
@@ -1438,6 +1458,9 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
 
+    p = command("update", cmd_update, "install the latest version of Neyra")
+    p.add_argument("--check", action="store_true", help="only say whether a new version is out")
+
     p = command("stats", cmd_stats, "anonymous stats for tune verdict: status, show the last report, on, off")
     p.add_argument("action", nargs="?", choices=["show", "on", "off"],
                    help="show: print the last report sent; on: ask after the next verdict; off: never ask or send")
@@ -1523,6 +1546,17 @@ def hub_error(e: urllib.error.HTTPError) -> str:
 
 def main(argv: list[str] | None = None, prog: str = "neyra") -> int:
     args = parser(prog).parse_args(argv)
+    code = dispatch(args)
+    try:
+        from . import update
+
+        update.notice(args)
+    except Exception:  # noqa: BLE001  a notice must never change how a command ends
+        pass
+    return code
+
+
+def dispatch(args) -> int:
     try:
         return args.fn(args)
     except Fail as e:
