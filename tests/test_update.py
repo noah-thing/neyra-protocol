@@ -12,7 +12,7 @@ def cache(tmp_path, monkeypatch):
     monkeypatch.setenv("NEYRA_CACHE", str(tmp_path))
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("NEYRA_NO_UPDATE_CHECK", raising=False)
-    monkeypatch.setattr(update.sys.stderr, "isatty", lambda: True)
+    monkeypatch.setattr(update, "interactive", lambda: True)
     started = []
     monkeypatch.setattr(update, "check_in_background", lambda: started.append(True))
     return started

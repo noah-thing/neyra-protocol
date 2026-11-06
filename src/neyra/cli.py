@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+from contextlib import suppress
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -1547,12 +1548,11 @@ def hub_error(e: urllib.error.HTTPError) -> str:
 def main(argv: list[str] | None = None, prog: str = "neyra") -> int:
     args = parser(prog).parse_args(argv)
     code = dispatch(args)
-    try:
+    # A notice must never change how a command ends.
+    with suppress(Exception):
         from . import update
 
         update.notice(args)
-    except Exception:  # noqa: BLE001  a notice must never change how a command ends
-        pass
     return code
 
 

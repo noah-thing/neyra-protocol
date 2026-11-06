@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from contextlib import suppress
 from importlib import metadata
 from pathlib import Path
 
@@ -54,8 +55,12 @@ def refresh() -> str | None:
     return latest
 
 
+def interactive() -> bool:
+    return sys.stderr.isatty()
+
+
 def quiet(args) -> bool:
-    return (getattr(args, "json", False) or not sys.stderr.isatty() or bool(os.environ.get("CI"))
+    return (getattr(args, "json", False) or not interactive() or bool(os.environ.get("CI"))
             or os.environ.get("NEYRA_NO_UPDATE_CHECK", "") not in ("", "0"))
 
 
@@ -94,7 +99,6 @@ def upgrade_command(prefix: str = sys.prefix) -> list[str]:
 
 
 if __name__ == "__main__":
-    try:
+    # A background check has nobody to tell.
+    with suppress(Exception):
         refresh()
-    except Exception:  # noqa: BLE001  a background check has nobody to tell
-        pass
