@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.5
 
 - `neyra update` installs the latest version, however Neyra was installed. A background check prints one line when a new version is out, and stays quiet in CI, with `--json` and under `NEYRA_NO_UPDATE_CHECK`.
 
