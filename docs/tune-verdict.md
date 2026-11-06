@@ -15,8 +15,8 @@ says so, and the exit code is 1.
 ## Input
 
 `CASES` is a jsonl file of 30 to 200 cases the tune never saw. Each line has an input and the expected output:
-`{"input": "...", "output": "..."}`. `expected`, `prompt`/`completion` and a `messages` row with one user and one
-assistant message are read too. An optional `system` is passed to every arm, and `id` names the case in the report.
+`{"input": "...", "output": "..."}`. `expected`, `prompt`/`completion` and a `messages` row are read too. A multi turn
+row scores its final answer, with the earlier turns as part of the input. An optional `system` is passed to every arm, and `id` names the case in the report.
 Ids must be unique. Under 10 cases the command refuses to run; under 30 it warns.
 
 `--examples FILE` is where the prompt with examples takes its examples. It is read in the same shapes, so your training file

@@ -439,10 +439,12 @@ class Editor:
         s = self.s
         self.prefixes()
         last = self.layers[-1]
+        self.say(f"solving the value at layer {last}")
         z, loss = self.values(batch, last)
         passes = self.layers + [last] * s.polish
         gaps = []
         for i, l in enumerate(passes):
+            self.say(f"writing layer {l}, pass {i + 1} of {len(passes)}")
             keys, copies = self.keys(batch, l)
             now = self.activations(batch, last, "out", [""])
             resid = np.repeat((z - now).T, copies, axis=1) / (len(passes) - i if i < len(self.layers) else 1)

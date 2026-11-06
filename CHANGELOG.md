@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.6
+
+- `tune verdict` accepts multi turn conversations, in cases and in `--examples`. It scores the final answer, with the earlier turns as context, so a run trained on a work process no longer stops at the test.
+- `tune verdict` reports its progress on stderr under `--json` too.
+- `edit` reports each stage as it runs: the value it solves, then every layer it writes.
+- A failed download no longer prints `None: no such file`.
+
 ## 0.3.5
 
 - `neyra update` installs the latest version, however Neyra was installed. A background check prints one line when a new version is out, and stays quiet in CI, with `--json` and under `NEYRA_NO_UPDATE_CHECK`.

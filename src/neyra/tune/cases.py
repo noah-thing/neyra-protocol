@@ -37,11 +37,12 @@ def _row(line: int, obj: dict) -> Case:
     if isinstance(obj.get("messages"), list):
         msgs = obj["messages"]
         system = system or next((m["content"] for m in msgs if m.get("role") == "system"), "")
-        users = [m["content"] for m in msgs if m.get("role") == "user"]
-        answers = [m["content"] for m in msgs if m.get("role") == "assistant"]
-        if len(users) != 1 or len(answers) != 1:
-            raise CaseError(f"line {line}: a messages row needs exactly one user and one assistant message")
-        inp, out = users[0], answers[0]
+        turns = [m for m in msgs if m.get("role") in ("user", "assistant")]
+        if len(turns) < 2 or turns[-1]["role"] != "assistant" or turns[-2]["role"] != "user":
+            raise CaseError(f"line {line}: a messages row has to end with a user message and the assistant's answer")
+        # Earlier turns ride along as text, so a multi step conversation scores on its final answer.
+        earlier = "".join(f"{m['role']}: {m['content']}\n" for m in turns[:-2])
+        inp, out = earlier + turns[-2]["content"], turns[-1]["content"]
     else:
         inp = _text(obj.get("input", obj.get("prompt")))
         out = _text(obj.get("output", obj.get("expected", obj.get("completion"))))

@@ -413,7 +413,7 @@ def cmd_tune_verdict(a) -> int:
         if chat is None:
             chat = backends.has_chat_template
         fmt = prompts.Format(chat, template, stop if stop or chat else ("\n",), a.system)
-        say = (lambda m: None) if a.json else (lambda m: print(m, file=sys.stderr))
+        say = lambda m: print(m, file=sys.stderr, flush=True)
         r = verdict.run(cases, backends, fmt, score_fn, a.scorer, shots, a.margin, a.cases, quants=None, say=say)
     except cases_mod.CaseError as e:
         raise Fail(BAD_INPUT, str(e)) from e
@@ -1582,7 +1582,7 @@ def dispatch(args) -> int:
               file=sys.stderr)
         return ENVIRONMENT
     except FileNotFoundError as e:
-        print(f"neyra: {e.filename}: no such file", file=sys.stderr)
+        print(f"neyra: {e.filename}: no such file" if e.filename else f"neyra: {e}", file=sys.stderr)
         return BAD_INPUT
     except UnicodeDecodeError:
         print("neyra: bad input: expected a text file but found binary data; is this the right file?", file=sys.stderr)
