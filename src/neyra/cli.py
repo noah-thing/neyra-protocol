@@ -433,6 +433,17 @@ def cmd_tune_verdict(a) -> int:
     return OK if r.passed else FINDINGS
 
 
+def cmd_app(a) -> int:
+    from . import desktop
+
+    try:
+        desktop.install()
+    except desktop.Stop as e:
+        print(f"neyra: {e}", file=sys.stderr)
+        return ENVIRONMENT
+    return 0
+
+
 def cmd_update(a) -> int:
     from . import update
 
@@ -1459,6 +1470,7 @@ def parser(prog: str = "neyra") -> argparse.ArgumentParser:
     p = command("conformance", cmd_conformance, "run the protocol's conformance vectors against this install")
     p.add_argument("vectors", nargs="?", help="a spec/vectors folder; default: the copy that ships with neyra")
 
+    command("app", cmd_app, "install and open the desktop app")
     p = command("update", cmd_update, "install the latest version of Neyra")
     p.add_argument("--check", action="store_true", help="only say whether a new version is out")
 

@@ -58,6 +58,12 @@ lists the backends you have.
 `neyra demo` takes about 0.1 s and downloads nothing. It builds a toy model and a LoRA in memory, then runs `check` on
 a merge that dropped the adapter and on one that kept it.
 
+There is also a desktop app for Apple Silicon Macs, with guided tasks and a workspace where an AI agent you already use runs Neyra while you watch.
+
+```sh
+neyra app
+```
+
 ## Tuning
 
 A falling loss shows the trainer ran. You still need three answers: did the model get better at your task, would a good

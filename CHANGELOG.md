@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.7
+
+- `neyra app` installs and opens the desktop app on an Apple Silicon Mac.
+
 ## 0.3.6
 
 - `tune verdict` accepts multi turn conversations, in cases and in `--examples`. It scores the final answer, with the earlier turns as context, so a run trained on a work process no longer stops at the test.
